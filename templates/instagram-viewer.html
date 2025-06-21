@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+        }
+        
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .header {
+            background-color: #e91e63;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            height: 40px;
+            box-sizing: border-box;
+        }
+        
+        .iframe-container {
+            position: absolute;
+            top: 40px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        
+        .error-message {
+            padding: 20px;
+            text-align: center;
+            font-family: Arial, sans-serif;
+            color: #666;
+        }
+        
+        .retry-button {
+            background-color: #e91e63;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .retry-button:hover {
+            background-color: #c2185b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            📸 Vibe Scroll - Instagram Viewer
+        </div>
+        <div class="iframe-container">
+            <iframe 
+                id="instagram-frame"
+                src="https://www.instagram.com"
+                title="Instagram"
+                onload="handleLoad()"
+                onerror="handleError()">
+            </iframe>
+            <div id="error-content" style="display: none;" class="error-message">
+                <h3>Unable to load Instagram</h3>
+                <p>Instagram may be blocking embedded access or you may need to be logged in.</p>
+                <button class="retry-button" onclick="retryLoad()">Retry</button>
+                <br><br>
+                <p><strong>Alternative:</strong> You can open Instagram in your default browser by clicking below:</p>
+                <button class="retry-button" onclick="openInBrowser()">Open Instagram in Browser</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+        
+        let loadAttempts = 0;
+        const maxAttempts = 3;
+        
+        function handleLoad() {
+            console.log('Instagram loaded successfully');
+            document.getElementById('error-content').style.display = 'none';
+            document.getElementById('instagram-frame').style.display = 'block';
+        }
+        
+        function handleError() {
+            console.log('Error loading Instagram');
+            showError();
+        }
+        
+        function showError() {
+            document.getElementById('instagram-frame').style.display = 'none';
+            document.getElementById('error-content').style.display = 'block';
+        }
+        
+        function retryLoad() {
+            if (loadAttempts < maxAttempts) {
+                loadAttempts++;
+                document.getElementById('error-content').style.display = 'none';
+                document.getElementById('instagram-frame').style.display = 'block';
+                document.getElementById('instagram-frame').src = 'https://www.instagram.com?retry=' + loadAttempts;
+            } else {
+                vscode.postMessage({
+                    command: 'alert',
+                    text: 'Max retry attempts reached. Instagram may be blocking embedded access.'
+                });
+            }
+        }
+        
+        function openInBrowser() {
+            vscode.postMessage({
+                command: 'alert',
+                text: 'Please manually open https://www.instagram.com in your browser'
+            });
+        }
+        
+        // Check if iframe loads correctly after a timeout
+        setTimeout(() => {
+            try {
+                const frame = document.getElementById('instagram-frame');
+                if (!frame.contentDocument && !frame.contentWindow) {
+                    showError();
+                }
+            } catch (e) {
+                // Cross-origin restrictions may cause this
+                console.log('Cross-origin access restricted - this is normal for Instagram');
+            }
+        }, 5000);
+    </script>
+</body>
+</html> 

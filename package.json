@@ -1,0 +1,43 @@
+{
+  "name": "vibe-scroll",
+  "displayName": "Vibe Scroll - Instagram Viewer",
+  "description": "A VSCode extension to view Instagram.com within the editor",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:vibe-scroll.openInstagram"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vibe-scroll.openInstagram",
+        "title": "Open Instagram",
+        "category": "Vibe Scroll"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "vibe-scroll.openInstagram",
+          "title": "Vibe Scroll: Open Instagram"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "typescript": "^4.9.4"
+  }
+} 
