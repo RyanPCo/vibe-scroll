@@ -2,20 +2,29 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run Extension",
+            "name": "Extension",
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}",
-                "--disable-extensions"
+                "--extensionDevelopmentPath=${workspaceFolder}"
             ],
             "outFiles": [
                 "${workspaceFolder}/out/**/*.js"
             ],
-            "preLaunchTask": "npm: compile",
-            "env": {
-                "VSCODE_DEBUG_MODE": "true"
-            }
+            "preLaunchTask": "${workspaceFolder}/npm: compile"
+        },
+        {
+            "name": "Extension Tests",
+            "type": "extensionHost",
+            "request": "launch",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}",
+                "--extensionTestsPath=${workspaceFolder}/out/test/suite/index"
+            ],
+            "outFiles": [
+                "${workspaceFolder}/out/test/**/*.js"
+            ],
+            "preLaunchTask": "${workspaceFolder}/npm: compile"
         }
     ]
 } 

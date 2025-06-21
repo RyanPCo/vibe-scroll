@@ -1,7 +1,7 @@
 {
   "name": "vibe-scroll",
-  "displayName": "Vibe Scroll - Instagram Viewer",
-  "description": "A VSCode extension to view Instagram.com within the editor",
+  "displayName": "Vibe Scroll - Instagram Reels Viewer",
+  "description": "A VSCode extension to browse Instagram Reels using headless browser automation",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.74.0"
@@ -10,22 +10,22 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:vibe-scroll.openInstagram"
+    "onCommand:instagramReels.scroll"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "vibe-scroll.openInstagram",
-        "title": "Open Instagram",
-        "category": "Vibe Scroll"
+        "command": "instagramReels.scroll",
+        "title": "Scroll Instagram Reels",
+        "category": "Instagram Reels"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "vibe-scroll.openInstagram",
-          "title": "Vibe Scroll: Open Instagram"
+          "command": "instagramReels.scroll",
+          "title": "Instagram Reels: Start Scrolling"
         }
       ]
     }
@@ -35,9 +35,18 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./"
   },
+  "dependencies": {
+    "puppeteer": "^21.5.0",
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "cookie": "^0.5.0"
+  },
   "devDependencies": {
     "@types/vscode": "^1.74.0",
     "@types/node": "16.x",
+    "@types/express": "^4.17.21",
+    "@types/ws": "^8.5.10",
+    "@types/cookie": "^0.5.4",
     "typescript": "^4.9.4"
   }
 } 
