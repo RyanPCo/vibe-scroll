@@ -3,6 +3,7 @@ import * as http from 'http';
 import * as WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { PuppeteerController } from '../controller/puppeteerController';
+import { VolumeService } from '../services/volumeService';
 
 export interface MediaBridgeConfig {
     port: number;
@@ -17,6 +18,7 @@ export class MediaBridge extends EventEmitter {
     private isRunning: boolean = false;
     private currentReelId: string = 'DKLNoc-MgPM';
     private puppeteerController: PuppeteerController | null = null;
+    private volumeService: VolumeService | null = null;
 
     constructor(config: MediaBridgeConfig) {
         super();
@@ -65,7 +67,16 @@ export class MediaBridge extends EventEmitter {
         });
     }
 
+    public setVolumeService(volumeService: VolumeService): void {
+        this.volumeService = volumeService;
+        console.log('Volume service connected to media bridge');
+        console.log('Platform support:', volumeService.getPlatformInfo());
+    }
+
     private setupRoutes(): void {
+        // JSON body parser
+        this.app.use(express.json());
+        
         // Enable CORS for webview
         this.app.use((req, res, next) => {
             res.header('Access-Control-Allow-Origin', this.config.corsOrigin);
@@ -203,6 +214,147 @@ export class MediaBridge extends EventEmitter {
             }
         });
 
+        // Debug endpoint to get media elements info
+        this.app.get('/api/debug/media', (req, res) => {
+            res.json({ 
+                success: true, 
+                message: 'Check browser console for detailed media element logs',
+                note: 'Volume control may be limited by Instagram security policies'
+            });
+        });
+
+        // Volume control endpoints
+        this.app.get('/api/volume', async (req, res) => {
+            try {
+                if (this.volumeService) {
+                    const volume = await this.volumeService.getSystemVolume();
+                    const muted = await this.volumeService.getSystemMuted();
+                    res.json({ 
+                        success: true, 
+                        volume: volume,
+                        muted: muted,
+                        platform: this.volumeService.getPlatformInfo()
+                    });
+                } else {
+                    res.status(503).json({ error: 'Volume service not available' });
+                }
+            } catch (error) {
+                console.error('Error getting volume:', error);
+                res.status(500).json({ error: 'Failed to get volume' });
+            }
+        });
+
+        this.app.post('/api/volume', async (req, res) => {
+            try {
+                if (this.volumeService) {
+                    const { volume } = req.body;
+                    if (typeof volume !== 'number' || volume < 0 || volume > 100) {
+                        res.status(400).json({ error: 'Volume must be a number between 0 and 100' });
+                        return;
+                    }
+                    
+                    const success = await this.volumeService.setSystemVolume(volume);
+                    if (success) {
+                        res.json({ success: true, volume: volume });
+                        // Broadcast volume change to connected clients
+                        this.broadcast({
+                            type: 'volume-changed',
+                            volume: volume,
+                            muted: await this.volumeService.getSystemMuted()
+                        });
+                    } else {
+                        res.status(500).json({ error: 'Failed to set volume' });
+                    }
+                } else {
+                    res.status(503).json({ error: 'Volume service not available' });
+                }
+            } catch (error) {
+                console.error('Error setting volume:', error);
+                res.status(500).json({ error: 'Failed to set volume' });
+            }
+        });
+
+        this.app.post('/api/volume/mute', async (req, res) => {
+            try {
+                if (this.volumeService) {
+                    const { muted } = req.body;
+                    if (typeof muted !== 'boolean') {
+                        res.status(400).json({ error: 'Muted must be a boolean' });
+                        return;
+                    }
+                    
+                    const success = await this.volumeService.setSystemMuted(muted);
+                    if (success) {
+                        res.json({ success: true, muted: muted });
+                        // Broadcast mute change to connected clients
+                        this.broadcast({
+                            type: 'volume-changed',
+                            volume: await this.volumeService.getSystemVolume(),
+                            muted: muted
+                        });
+                    } else {
+                        res.status(500).json({ error: 'Failed to set mute state' });
+                    }
+                } else {
+                    res.status(503).json({ error: 'Volume service not available' });
+                }
+            } catch (error) {
+                console.error('Error setting mute state:', error);
+                res.status(500).json({ error: 'Failed to set mute state' });
+            }
+        });
+
+        this.app.post('/api/volume/toggle-mute', async (req, res) => {
+            try {
+                if (this.volumeService) {
+                    const success = await this.volumeService.toggleMute();
+                    if (success) {
+                        const currentState = this.volumeService.getLastKnownState();
+                        res.json({ success: true, muted: currentState.muted });
+                        // Broadcast mute change to connected clients
+                        this.broadcast({
+                            type: 'volume-changed',
+                            volume: currentState.volume,
+                            muted: currentState.muted
+                        });
+                    } else {
+                        res.status(500).json({ error: 'Failed to toggle mute' });
+                    }
+                } else {
+                    res.status(503).json({ error: 'Volume service not available' });
+                }
+            } catch (error) {
+                console.error('Error toggling mute:', error);
+                res.status(500).json({ error: 'Failed to toggle mute' });
+            }
+        });
+
+        this.app.post('/api/volume/adjust', async (req, res) => {
+            try {
+                if (this.volumeService) {
+                    const { delta } = req.body;
+                    if (typeof delta !== 'number') {
+                        res.status(400).json({ error: 'Delta must be a number' });
+                        return;
+                    }
+                    
+                    const newVolume = await this.volumeService.adjustVolume(delta);
+                    res.json({ success: true, volume: newVolume });
+                    // Broadcast volume change to connected clients
+                    this.broadcast({
+                        type: 'volume-changed',
+                        volume: newVolume,
+                        muted: await this.volumeService.getSystemMuted()
+                    });
+                } else {
+                    res.status(503).json({ error: 'Volume service not available' });
+                }
+            } catch (error) {
+                console.error('Error adjusting volume:', error);
+                res.status(500).json({ error: 'Failed to adjust volume' });
+            }
+        });
+
         // Error handling middleware
         this.app.use((error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
             console.error('Express error:', error);
@@ -302,45 +454,70 @@ export class MediaBridge extends EventEmitter {
             right: 20px;
         }
         
-        /* Bottom Controls */
-        .bottom-controls {
+        /* Volume Control */
+        .volume-control {
             position: absolute;
-            bottom: 20px;
+            bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            display: flex;
-            gap: 15px;
-            z-index: 1000;
-        }
-        
-        .control-btn {
             background: rgba(0, 0, 0, 0.7);
-            color: #fff;
-            border: none;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            font-size: 18px;
-            cursor: pointer;
-            transition: all 0.2s;
-            backdrop-filter: blur(10px);
+            border-radius: 25px;
+            padding: 10px 20px;
             display: flex;
             align-items: center;
-            justify-content: center;
+            gap: 12px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            transition: opacity 0.3s ease;
         }
         
-        .control-btn:hover {
+        .volume-control:hover {
             background: rgba(0, 0, 0, 0.9);
-            transform: scale(1.1);
         }
         
-        .control-btn:active {
-            transform: scale(0.95);
+        .volume-icon {
+            color: #fff;
+            font-size: 18px;
+            cursor: pointer;
+            min-width: 20px;
+            text-align: center;
         }
         
-        .control-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        .volume-slider {
+            width: 100px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .volume-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .volume-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .volume-percentage {
+            color: #fff;
+            font-size: 12px;
+            min-width: 30px;
+            text-align: center;
         }
         
         /* Notification */
@@ -519,16 +696,7 @@ export class MediaBridge extends EventEmitter {
                 right: 10px;
             }
             
-            .bottom-controls {
-                bottom: 10px;
-                gap: 10px;
-            }
-            
-            .control-btn {
-                width: 40px;
-                height: 40px;
-                font-size: 16px;
-            }
+
             
             .debug-panel {
                 width: calc(100vw - 20px);
@@ -540,6 +708,25 @@ export class MediaBridge extends EventEmitter {
             .debug-panel.minimized {
                 width: 50px;
                 height: 50px;
+            }
+            
+            .volume-control {
+                bottom: 20px;
+                padding: 8px 16px;
+                gap: 8px;
+            }
+            
+            .volume-slider {
+                width: 80px;
+            }
+            
+            .volume-icon {
+                font-size: 16px;
+            }
+            
+            .volume-percentage {
+                font-size: 11px;
+                min-width: 25px;
             }
         }
     </style>
@@ -556,7 +743,7 @@ export class MediaBridge extends EventEmitter {
         </div>
         
         <div class="embed-wrapper">
-            <blockquote class="instagram-media" data-instgrm-captioned data-instgrm-permalink="${reelUrl}?utm_source=ig_embed&amp;utm_campaign=loading" data-instgrm-version="14" style="background:#FFF; border:0; border-radius:3px; box-shadow:0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15); margin: 1px; max-width:540px; min-width:326px; padding:0; width:99.375%; width:-webkit-calc(100% - 2px); width:calc(100% - 2px);">
+            <blockquote class="instagram-media" data-instgrm-captioned data-instgrm-permalink="${reelUrl}?utm_source=ig_embed&amp;utm_campaign=loading" data-instgrm-version="14" data-instgrm-autoplay="true" style="background:#FFF; border:0; border-radius:3px; box-shadow:0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15); margin: 1px; max-width:540px; min-width:326px; padding:0; width:99.375%; width:-webkit-calc(100% - 2px); width:calc(100% - 2px);">
                 <div style="padding:16px;">
                     <a href="${reelUrl}?utm_source=ig_embed&amp;utm_campaign=loading" style="background:#FFFFFF; line-height:0; padding:0 0; text-align:center; text-decoration:none; width:100%;" target="_blank">
                         <div style="display: flex; flex-direction: row; align-items: center;">
@@ -612,12 +799,7 @@ export class MediaBridge extends EventEmitter {
         
         <button id="next-btn" class="nav-btn nav-btn-right">⬇</button>
         
-        <div class="bottom-controls">
-            <button id="like-btn" class="control-btn" title="Like">❤️</button>
-            <button id="save-btn" class="control-btn" title="Save">📖</button>
-            <button id="open-browser-btn" class="control-btn" title="Open in Browser">🌐</button>
-            <button id="refresh-btn" class="control-btn" title="Refresh">🔄</button>
-        </div>
+
     </div>
     
     <!-- Debug Panel 
@@ -636,6 +818,8 @@ export class MediaBridge extends EventEmitter {
             </div>
         </div>
     </div> -->
+
+
     
     <script async src="//www.instagram.com/embed.js" onload="initializeApp()"></script>
     <script>
@@ -648,6 +832,7 @@ export class MediaBridge extends EventEmitter {
             setupKeyboardShortcuts();
             setupWebSocket();
             setupDebugPanel();
+            setupPostMessageListener();
             loadInitialDebugInfo();
         }
         
@@ -803,38 +988,15 @@ export class MediaBridge extends EventEmitter {
             // Navigation buttons
             document.getElementById('prev-btn').addEventListener('click', () => handleAction('/api/previous'));
             document.getElementById('next-btn').addEventListener('click', () => handleAction('/api/next'));
-            
-            // Interaction buttons
-            document.getElementById('like-btn').addEventListener('click', () => handleAction('/api/like', 'Reel liked! ❤️'));
-            document.getElementById('save-btn').addEventListener('click', () => handleAction('/api/save', 'Reel saved! 📖'));
-            document.getElementById('refresh-btn').addEventListener('click', () => handleAction('/api/refresh', 'Refreshed! 🔄'));
-            
-            // Open in browser (GET request)
-            document.getElementById('open-browser-btn').addEventListener('click', async () => {
-                try {
-                    setLoading(true);
-                    const response = await fetch('/api/open-browser');
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        // Open URL in new tab/window
-                        window.open(data.url, '_blank');
-                        showNotification('Opening in browser... 🌐');
-                    } else {
-                        showNotification('Failed to get reel URL', 'error');
-                    }
-                } catch (error) {
-                    console.error('Error opening in browser:', error);
-                    showNotification('Error opening in browser', 'error');
-                } finally {
-                    setLoading(false);
-                }
-            });
         }
+        
+
         
         function setupKeyboardShortcuts() {
             document.addEventListener('keydown', (e) => {
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                // Skip if user is typing in an input field
+                if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+                if (e.target.tagName === 'TEXTAREA') return;
                 
                 switch(e.key.toLowerCase()) {
                     case 'arrowdown':
@@ -847,24 +1009,135 @@ export class MediaBridge extends EventEmitter {
                         e.preventDefault();
                         document.getElementById('prev-btn').click();
                         break;
-                    case 'l':
-                        e.preventDefault();
-                        document.getElementById('like-btn').click();
-                        break;
-                    case 's':
-                        e.preventDefault();
-                        document.getElementById('save-btn').click();
-                        break;
-                    case 'r':
-                        e.preventDefault();
-                        document.getElementById('refresh-btn').click();
-                        break;
-                    case 'o':
-                        e.preventDefault();
-                        document.getElementById('open-browser-btn').click();
-                        break;
                 }
             });
+        }
+        
+        function setupPostMessageListener() {
+            window.addEventListener('message', (event) => {
+                // Accept messages from the parent webview (more flexible origin checking)
+                if (!event.origin.includes('vscode-webview') && event.origin !== 'null' && !event.origin.includes('localhost')) return;
+                
+                const message = event.data;
+                if (message.type === 'setVolume') {
+                    console.log('Received volume command from webview:', Math.round(message.volume * 100) + '%');
+                    
+                    // Try to apply volume to any video elements
+                    applyVolumeToVideos(message.volume);
+                }
+            });
+        }
+        
+        function applyVolumeToVideos(volumeLevel) {
+            try {
+                console.log('applyVolumeToVideos called with volume:', volumeLevel);
+                
+                // Find all video elements in the page
+                const videos = document.querySelectorAll('video');
+                console.log('Found', videos.length, 'video elements on page');
+                
+                if (videos.length === 0) {
+                    console.log('No video elements found. Page content:', document.body.innerHTML.substring(0, 500));
+                }
+                
+                videos.forEach((video, index) => {
+                    try {
+                        const oldVolume = video.volume;
+                        video.volume = volumeLevel;
+                        if (volumeLevel === 0) {
+                            video.muted = true;
+                        } else {
+                            video.muted = false;
+                        }
+                        console.log('Video', index, '- Changed volume from', oldVolume, 'to', video.volume, ', muted:', video.muted);
+                    } catch (error) {
+                        console.log('Could not control video', index, 'volume:', error);
+                    }
+                });
+                
+                // Try to find Instagram embed iframe and send message to it
+                const iframes = document.querySelectorAll('iframe');
+                console.log('Found', iframes.length, 'iframes on page');
+                
+                iframes.forEach((iframe, index) => {
+                    console.log('Iframe', index, 'src:', iframe.src);
+                    try {
+                        if (iframe.src && iframe.src.includes('instagram.com')) {
+                            iframe.contentWindow.postMessage({
+                                type: 'setVolume',
+                                volume: volumeLevel
+                            }, '*');
+                            console.log('Sent volume command to Instagram iframe', index, ':', volumeLevel);
+                        }
+                    } catch (error) {
+                        console.log('Could not send volume message to Instagram iframe', index, ':', error);
+                    }
+                });
+                
+                // Check for any audio elements too
+                const audioElements = document.querySelectorAll('audio');
+                console.log('Found', audioElements.length, 'audio elements on page');
+                audioElements.forEach((audio, index) => {
+                    try {
+                        audio.volume = volumeLevel;
+                        audio.muted = volumeLevel === 0;
+                        console.log('Set audio element', index, 'volume to', volumeLevel);
+                    } catch (error) {
+                        console.log('Could not control audio element', index, ':', error);
+                    }
+                });
+                
+                // Use a mutation observer to catch dynamically added videos
+                if (!window.volumeObserver) {
+                    console.log('Setting up mutation observer for dynamic content');
+                    window.volumeObserver = new MutationObserver((mutations) => {
+                        mutations.forEach((mutation) => {
+                            mutation.addedNodes.forEach((node) => {
+                                if (node.nodeType === Node.ELEMENT_NODE) {
+                                    const videos = node.querySelectorAll ? node.querySelectorAll('video') : [];
+                                    const audios = node.querySelectorAll ? node.querySelectorAll('audio') : [];
+                                    
+                                    if (videos.length > 0) {
+                                        console.log('Mutation observer found', videos.length, 'new video elements');
+                                        videos.forEach(video => {
+                                            try {
+                                                video.volume = window.currentVolume || 0.75;
+                                                console.log('Applied volume to dynamically added video:', video.volume);
+                                            } catch (error) {
+                                                console.log('Could not control dynamic video volume:', error);
+                                            }
+                                        });
+                                    }
+                                    
+                                    if (audios.length > 0) {
+                                        console.log('Mutation observer found', audios.length, 'new audio elements');
+                                        audios.forEach(audio => {
+                                            try {
+                                                audio.volume = window.currentVolume || 0.75;
+                                                console.log('Applied volume to dynamically added audio:', audio.volume);
+                                            } catch (error) {
+                                                console.log('Could not control dynamic audio volume:', error);
+                                            }
+                                        });
+                                    }
+                                }
+                            });
+                        });
+                    });
+                    
+                    window.volumeObserver.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                }
+                
+                // Store current volume globally
+                window.currentVolume = volumeLevel;
+                console.log('Stored global volume:', window.currentVolume);
+                
+            } catch (error) {
+                console.error('Error applying volume to videos:', error);
+            }
         }
         
         async function handleAction(endpoint, successMessage = null) {
@@ -905,7 +1178,7 @@ export class MediaBridge extends EventEmitter {
         
         function setLoading(loading) {
             isLoading = loading;
-            const buttons = ['prev-btn', 'next-btn', 'like-btn', 'save-btn', 'open-browser-btn', 'refresh-btn'];
+            const buttons = ['prev-btn', 'next-btn'];
             
             buttons.forEach(id => {
                 const btn = document.getElementById(id);
