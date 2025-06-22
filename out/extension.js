@@ -46,9 +46,12 @@ async function startInstagramReelsViewer(context) {
             }
             progress.report({ increment: 20, message: "Initializing Puppeteer controller..." });
             // Initialize Puppeteer controller
+            console.log('🔧 Creating PuppeteerController with path:', context.extensionPath);
             exports.puppeteerController = puppeteerController = new puppeteerController_1.PuppeteerController(context.extensionPath);
             // Set up controller event handlers
             setupControllerEventHandlers();
+            console.log('🚀 Starting controller initialization...');
+            await puppeteerController.initialize();
             progress.report({ increment: 30, message: "Initializing volume service..." });
             // Initialize volume service
             exports.volumeService = volumeService = new volumeService_1.VolumeService();

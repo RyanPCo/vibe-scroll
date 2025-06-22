@@ -52,10 +52,14 @@ async function startInstagramReelsViewer(context: vscode.ExtensionContext) {
                 progress.report({ increment: 20, message: "Initializing Puppeteer controller..." });
 
                 // Initialize Puppeteer controller
+                console.log('🔧 Creating PuppeteerController with path:', context.extensionPath);
                 puppeteerController = new PuppeteerController(context.extensionPath);
                 
                 // Set up controller event handlers
                 setupControllerEventHandlers();
+                
+                console.log('🚀 Starting controller initialization...');
+                await puppeteerController.initialize();
 
                 progress.report({ increment: 30, message: "Initializing volume service..." });
 

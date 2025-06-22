@@ -145,9 +145,10 @@ export class ReelsWebviewPanel {
     private async _handleMessage(message: any) {
         switch (message.command) {
             case 'ready':
-                // Webview is ready, initialize controller if not already done
+                // Webview is ready - controller should already be initialized from extension.ts
+                console.log('🎯 Webview ready, controller initialized:', this._controller.isInitialized());
                 if (!this._controller.isInitialized()) {
-                    await this._controller.initialize();
+                    console.log('⚠️ Controller not initialized, this should not happen with the new flow');
                 }
                 break;
             // All other interactions are now handled by the server

@@ -44,8 +44,20 @@ export class PuppeteerController extends EventEmitter {
                 // macOS
                 executablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
             } else if (platform === 'win32') {
-                // Windows
-                executablePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+                // Windows - check multiple possible locations
+                const windowsChromePaths = [
+                    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+                    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+                    `C:\\Users\\${process.env.USERNAME}\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe`
+                ];
+                
+                for (const chromePath of windowsChromePaths) {
+                    if (fs.existsSync(chromePath)) {
+                        executablePath = chromePath;
+                        console.log(`Found Chrome at: ${chromePath}`);
+                        break;
+                    }
+                }
             } else if (platform === 'linux') {
                 // Linux
                 executablePath = '/usr/bin/google-chrome';
@@ -57,30 +69,44 @@ export class PuppeteerController extends EventEmitter {
                 executablePath = undefined;
             }
 
-            this.browser = await puppeteer.launch({
-                headless: true, // Running headlessly for better performance
-                defaultViewport: { width: 1280, height: 720 },
-                executablePath, // Use system Chrome if available
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
+            // Windows-compatible Chrome arguments (avoid problematic flags)
+            const chromeArgs = [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-web-security',
+                '--no-first-run'
+            ];
+
+            // Add platform-specific args
+            if (platform === 'win32') {
+                // Windows-specific safe args
+                chromeArgs.push(
                     '--disable-gpu',
-                    '--disable-web-security',
-                    '--disable-features=VizDisplayCompositor',
+                    '--disable-features=VizDisplayCompositor'
+                );
+            } else {
+                // Mac/Linux can handle more args
+                chromeArgs.push(
+                    '--disable-accelerated-2d-canvas',
+                    '--no-zygote',
                     '--disable-background-timer-throttling',
                     '--disable-backgrounding-occluded-windows',
                     '--disable-renderer-backgrounding'
-                ]
+                );
+            }
+
+            this.browser = await puppeteer.launch({
+                headless: false,
+                defaultViewport: { width: 1280, height: 720 },
+                executablePath, // Use system Chrome if available
+                args: chromeArgs
             });
 
             this.page = await this.browser.newPage();
             
             // Set user agent to avoid detection
-            await this.page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+            await this.page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
             
             await this.loadCookies();
             await this.navigateToReels();
@@ -289,6 +315,13 @@ export class PuppeteerController extends EventEmitter {
             });
             
             await this.collectionPage.waitForTimeout(3000);
+            
+            // Check if collection page still exists (might be closed during cleanup)
+            if (!this.collectionPage || this.collectionPage.isClosed()) {
+                console.log('Collection page closed during background collection setup');
+                return;
+            }
+            
             await this.collectionPage.waitForSelector('video', { timeout: 15000 });
             
             // Collect reels in background
