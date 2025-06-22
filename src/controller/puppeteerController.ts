@@ -85,13 +85,33 @@ export class PuppeteerController extends EventEmitter {
 
     async loadCookies(): Promise<void> {
         try {
+            // First navigate to Instagram to set domain for cookies
+            await this.page!.goto('https://www.instagram.com', { waitUntil: 'domcontentloaded' });
+            
+            // Set the specific sessionid cookie
+            const sessionCookie = {
+                name: 'sessionid',
+                value: '75619196791%3AGvXksZhHYAh1xa%3A1%3AAYcBNg7pqIRxWz0x5OLtRdrMavKXj1cnvgUtA9-JYg',
+                domain: '.instagram.com',
+                path: '/',
+                httpOnly: true,
+                secure: true,
+                sameSite: 'None' as const
+            };
+            
+            await this.page!.setCookie(sessionCookie);
+            console.log('Session cookie set successfully');
+            
+            // Load additional cookies from file if they exist
             if (fs.existsSync(this.cookiesPath)) {
                 const cookiesString = fs.readFileSync(this.cookiesPath, 'utf8');
                 const cookies = JSON.parse(cookiesString);
                 await this.page!.setCookie(...cookies);
-                this.isLoggedIn = true;
-                console.log('Cookies loaded successfully');
+                console.log('Additional cookies loaded from file');
             }
+            
+            this.isLoggedIn = true;
+            console.log('Cookies loaded successfully');
         } catch (error) {
             console.error('Failed to load cookies:', error);
         }
