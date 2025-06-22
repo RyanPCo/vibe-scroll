@@ -3,7 +3,6 @@ import * as http from 'http';
 import * as WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { PuppeteerController } from '../controller/puppeteerController';
-import { VolumeService } from '../services/volumeService';
 
 export interface MediaBridgeConfig {
     port: number;
@@ -18,7 +17,6 @@ export class MediaBridge extends EventEmitter {
     private isRunning: boolean = false;
     private currentReelId: string = 'DKLNoc-MgPM';
     private puppeteerController: PuppeteerController | null = null;
-    private volumeService: VolumeService | null = null;
 
     constructor(config: MediaBridgeConfig) {
         super();
@@ -65,12 +63,6 @@ export class MediaBridge extends EventEmitter {
                 });
             }
         });
-    }
-
-    public setVolumeService(volumeService: VolumeService): void {
-        this.volumeService = volumeService;
-        console.log('Volume service connected to media bridge');
-        console.log('Platform support:', volumeService.getPlatformInfo());
     }
 
     private setupRoutes(): void {
@@ -218,141 +210,8 @@ export class MediaBridge extends EventEmitter {
         this.app.get('/api/debug/media', (req, res) => {
             res.json({ 
                 success: true, 
-                message: 'Check browser console for detailed media element logs',
-                note: 'Volume control may be limited by Instagram security policies'
+                message: 'Check browser console for detailed media element logs'
             });
-        });
-
-        // Volume control endpoints
-        this.app.get('/api/volume', async (req, res) => {
-            try {
-                if (this.volumeService) {
-                    const volume = await this.volumeService.getSystemVolume();
-                    const muted = await this.volumeService.getSystemMuted();
-                    res.json({ 
-                        success: true, 
-                        volume: volume,
-                        muted: muted,
-                        platform: this.volumeService.getPlatformInfo()
-                    });
-                } else {
-                    res.status(503).json({ error: 'Volume service not available' });
-                }
-            } catch (error) {
-                console.error('Error getting volume:', error);
-                res.status(500).json({ error: 'Failed to get volume' });
-            }
-        });
-
-        this.app.post('/api/volume', async (req, res) => {
-            try {
-                if (this.volumeService) {
-                    const { volume } = req.body;
-                    if (typeof volume !== 'number' || volume < 0 || volume > 100) {
-                        res.status(400).json({ error: 'Volume must be a number between 0 and 100' });
-                        return;
-                    }
-                    
-                    const success = await this.volumeService.setSystemVolume(volume);
-                    if (success) {
-                        res.json({ success: true, volume: volume });
-                        // Broadcast volume change to connected clients
-                        this.broadcast({
-                            type: 'volume-changed',
-                            volume: volume,
-                            muted: await this.volumeService.getSystemMuted()
-                        });
-                    } else {
-                        res.status(500).json({ error: 'Failed to set volume' });
-                    }
-                } else {
-                    res.status(503).json({ error: 'Volume service not available' });
-                }
-            } catch (error) {
-                console.error('Error setting volume:', error);
-                res.status(500).json({ error: 'Failed to set volume' });
-            }
-        });
-
-        this.app.post('/api/volume/mute', async (req, res) => {
-            try {
-                if (this.volumeService) {
-                    const { muted } = req.body;
-                    if (typeof muted !== 'boolean') {
-                        res.status(400).json({ error: 'Muted must be a boolean' });
-                        return;
-                    }
-                    
-                    const success = await this.volumeService.setSystemMuted(muted);
-                    if (success) {
-                        res.json({ success: true, muted: muted });
-                        // Broadcast mute change to connected clients
-                        this.broadcast({
-                            type: 'volume-changed',
-                            volume: await this.volumeService.getSystemVolume(),
-                            muted: muted
-                        });
-                    } else {
-                        res.status(500).json({ error: 'Failed to set mute state' });
-                    }
-                } else {
-                    res.status(503).json({ error: 'Volume service not available' });
-                }
-            } catch (error) {
-                console.error('Error setting mute state:', error);
-                res.status(500).json({ error: 'Failed to set mute state' });
-            }
-        });
-
-        this.app.post('/api/volume/toggle-mute', async (req, res) => {
-            try {
-                if (this.volumeService) {
-                    const success = await this.volumeService.toggleMute();
-                    if (success) {
-                        const currentState = this.volumeService.getLastKnownState();
-                        res.json({ success: true, muted: currentState.muted });
-                        // Broadcast mute change to connected clients
-                        this.broadcast({
-                            type: 'volume-changed',
-                            volume: currentState.volume,
-                            muted: currentState.muted
-                        });
-                    } else {
-                        res.status(500).json({ error: 'Failed to toggle mute' });
-                    }
-                } else {
-                    res.status(503).json({ error: 'Volume service not available' });
-                }
-            } catch (error) {
-                console.error('Error toggling mute:', error);
-                res.status(500).json({ error: 'Failed to toggle mute' });
-            }
-        });
-
-        this.app.post('/api/volume/adjust', async (req, res) => {
-            try {
-                if (this.volumeService) {
-                    const { delta } = req.body;
-                    if (typeof delta !== 'number') {
-                        res.status(400).json({ error: 'Delta must be a number' });
-                        return;
-                    }
-                    
-                    const newVolume = await this.volumeService.adjustVolume(delta);
-                    res.json({ success: true, volume: newVolume });
-                    // Broadcast volume change to connected clients
-                    this.broadcast({
-                        type: 'volume-changed',
-                        volume: newVolume,
-                        muted: await this.volumeService.getSystemMuted()
-                    });
-                } else {
-                    res.status(503).json({ error: 'Volume service not available' });
-                }
-            } catch (error) {
-                console.error('Error adjusting volume:', error);
-                res.status(500).json({ error: 'Failed to adjust volume' });
-            }
         });
 
         // Error handling middleware
@@ -454,71 +313,7 @@ export class MediaBridge extends EventEmitter {
             right: 20px;
         }
         
-        /* Volume Control */
-        .volume-control {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 25px;
-            padding: 10px 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-            transition: opacity 0.3s ease;
-        }
-        
-        .volume-control:hover {
-            background: rgba(0, 0, 0, 0.9);
-        }
-        
-        .volume-icon {
-            color: #fff;
-            font-size: 18px;
-            cursor: pointer;
-            min-width: 20px;
-            text-align: center;
-        }
-        
-        .volume-slider {
-            width: 100px;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 2px;
-            outline: none;
-            cursor: pointer;
-            position: relative;
-        }
-        
-        .volume-slider::-webkit-slider-thumb {
-            appearance: none;
-            width: 16px;
-            height: 16px;
-            background: #fff;
-            border-radius: 50%;
-            cursor: pointer;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-        }
-        
-        .volume-slider::-moz-range-thumb {
-            width: 16px;
-            height: 16px;
-            background: #fff;
-            border-radius: 50%;
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-        }
-        
-        .volume-percentage {
-            color: #fff;
-            font-size: 12px;
-            min-width: 30px;
-            text-align: center;
-        }
+
         
         /* Notification */
         .notification {
@@ -710,24 +505,7 @@ export class MediaBridge extends EventEmitter {
                 height: 50px;
             }
             
-            .volume-control {
-                bottom: 20px;
-                padding: 8px 16px;
-                gap: 8px;
-            }
-            
-            .volume-slider {
-                width: 80px;
-            }
-            
-            .volume-icon {
-                font-size: 16px;
-            }
-            
-            .volume-percentage {
-                font-size: 11px;
-                min-width: 25px;
-            }
+
         }
     </style>
 </head>
@@ -1078,126 +856,8 @@ export class MediaBridge extends EventEmitter {
                 // Accept messages from the parent webview (more flexible origin checking)
                 if (!event.origin.includes('vscode-webview') && event.origin !== 'null' && !event.origin.includes('localhost')) return;
                 
-                const message = event.data;
-                if (message.type === 'setVolume') {
-                    console.log('Received volume command from webview:', Math.round(message.volume * 100) + '%');
-                    
-                    // Try to apply volume to any video elements
-                    applyVolumeToVideos(message.volume);
-                }
+                // No message handling currently needed
             });
-        }
-        
-        function applyVolumeToVideos(volumeLevel) {
-            try {
-                console.log('applyVolumeToVideos called with volume:', volumeLevel);
-                
-                // Find all video elements in the page
-                const videos = document.querySelectorAll('video');
-                console.log('Found', videos.length, 'video elements on page');
-                
-                if (videos.length === 0) {
-                    console.log('No video elements found. Page content:', document.body.innerHTML.substring(0, 500));
-                }
-                
-                videos.forEach((video, index) => {
-                    try {
-                        const oldVolume = video.volume;
-                        video.volume = volumeLevel;
-                        if (volumeLevel === 0) {
-                            video.muted = true;
-                        } else {
-                            video.muted = false;
-                        }
-                        console.log('Video', index, '- Changed volume from', oldVolume, 'to', video.volume, ', muted:', video.muted);
-                    } catch (error) {
-                        console.log('Could not control video', index, 'volume:', error);
-                    }
-                });
-                
-                // Try to find Instagram embed iframe and send message to it
-                const iframes = document.querySelectorAll('iframe');
-                console.log('Found', iframes.length, 'iframes on page');
-                
-                iframes.forEach((iframe, index) => {
-                    console.log('Iframe', index, 'src:', iframe.src);
-                    try {
-                        if (iframe.src && iframe.src.includes('instagram.com')) {
-                            iframe.contentWindow.postMessage({
-                                type: 'setVolume',
-                                volume: volumeLevel
-                            }, '*');
-                            console.log('Sent volume command to Instagram iframe', index, ':', volumeLevel);
-                        }
-                    } catch (error) {
-                        console.log('Could not send volume message to Instagram iframe', index, ':', error);
-                    }
-                });
-                
-                // Check for any audio elements too
-                const audioElements = document.querySelectorAll('audio');
-                console.log('Found', audioElements.length, 'audio elements on page');
-                audioElements.forEach((audio, index) => {
-                    try {
-                        audio.volume = volumeLevel;
-                        audio.muted = volumeLevel === 0;
-                        console.log('Set audio element', index, 'volume to', volumeLevel);
-                    } catch (error) {
-                        console.log('Could not control audio element', index, ':', error);
-                    }
-                });
-                
-                // Use a mutation observer to catch dynamically added videos
-                if (!window.volumeObserver) {
-                    console.log('Setting up mutation observer for dynamic content');
-                    window.volumeObserver = new MutationObserver((mutations) => {
-                        mutations.forEach((mutation) => {
-                            mutation.addedNodes.forEach((node) => {
-                                if (node.nodeType === Node.ELEMENT_NODE) {
-                                    const videos = node.querySelectorAll ? node.querySelectorAll('video') : [];
-                                    const audios = node.querySelectorAll ? node.querySelectorAll('audio') : [];
-                                    
-                                    if (videos.length > 0) {
-                                        console.log('Mutation observer found', videos.length, 'new video elements');
-                                        videos.forEach(video => {
-                                            try {
-                                                video.volume = window.currentVolume || 0.75;
-                                                console.log('Applied volume to dynamically added video:', video.volume);
-                                            } catch (error) {
-                                                console.log('Could not control dynamic video volume:', error);
-                                            }
-                                        });
-                                    }
-                                    
-                                    if (audios.length > 0) {
-                                        console.log('Mutation observer found', audios.length, 'new audio elements');
-                                        audios.forEach(audio => {
-                                            try {
-                                                audio.volume = window.currentVolume || 0.75;
-                                                console.log('Applied volume to dynamically added audio:', audio.volume);
-                                            } catch (error) {
-                                                console.log('Could not control dynamic audio volume:', error);
-                                            }
-                                        });
-                                    }
-                                }
-                            });
-                        });
-                    });
-                    
-                    window.volumeObserver.observe(document.body, {
-                        childList: true,
-                        subtree: true
-                    });
-                }
-                
-                // Store current volume globally
-                window.currentVolume = volumeLevel;
-                console.log('Stored global volume:', window.currentVolume);
-                
-            } catch (error) {
-                console.error('Error applying volume to videos:', error);
-            }
         }
         
         async function handleAction(endpoint, successMessage = null) {

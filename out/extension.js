@@ -1,17 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.volumeService = exports.mediaBridge = exports.puppeteerController = exports.deactivate = exports.activate = void 0;
+exports.mediaBridge = exports.puppeteerController = exports.deactivate = exports.activate = void 0;
 const vscode = require("vscode");
 const puppeteerController_1 = require("./controller/puppeteerController");
 const reelsWebview_1 = require("./panels/reelsWebview");
 const mediaBridge_1 = require("./server/mediaBridge");
-const volumeService_1 = require("./services/volumeService");
 let puppeteerController;
 exports.puppeteerController = puppeteerController;
 let mediaBridge;
 exports.mediaBridge = mediaBridge;
-let volumeService;
-exports.volumeService = volumeService;
 function activate(context) {
     console.log('🎬 Instagram Reels Viewer extension is now active!');
     // Register the main command
@@ -52,9 +49,6 @@ async function startInstagramReelsViewer(context) {
             setupControllerEventHandlers();
             console.log('🚀 Starting controller initialization...');
             await puppeteerController.initialize();
-            progress.report({ increment: 30, message: "Initializing volume service..." });
-            // Initialize volume service
-            exports.volumeService = volumeService = new volumeService_1.VolumeService();
             progress.report({ increment: 50, message: "Starting media bridge server..." });
             // Initialize media bridge (optional)
             try {
@@ -64,8 +58,6 @@ async function startInstagramReelsViewer(context) {
                 });
                 // Set the puppeteer controller for the media bridge
                 mediaBridge.setPuppeteerController(puppeteerController);
-                // Set the volume service for the media bridge
-                mediaBridge.setVolumeService(volumeService);
                 await mediaBridge.start();
             }
             catch (error) {
@@ -130,10 +122,6 @@ async function cleanup() {
         if (mediaBridge) {
             await mediaBridge.stop();
             exports.mediaBridge = mediaBridge = undefined;
-        }
-        // Clean up volume service
-        if (volumeService) {
-            exports.volumeService = volumeService = undefined;
         }
         console.log('✅ Cleanup completed');
     }

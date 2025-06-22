@@ -12,12 +12,6 @@
     // Main content elements
     const instagramIframe = document.getElementById('instagram-iframe');
     
-    // Volume control elements
-    const volumeControl = document.getElementById('volume-control');
-    const volumeSlider = document.getElementById('volume-slider');
-    const volumeIcon = document.getElementById('volume-icon');
-    const volumePercentage = document.getElementById('volume-percentage');
-    
     // Error elements
     const errorMessage = document.getElementById('error-message');
     const manualLoginMessage = document.getElementById('manual-login-message');
@@ -31,7 +25,6 @@
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
         setupEventListeners();
-        setupVolumeControl();
         setupKeyboardShortcuts();
         showScreen('loading');
         
@@ -86,224 +79,14 @@
         }
     }
     
-    function setupVolumeControl() {
-        if (!volumeSlider || !volumeIcon || !volumePercentage) {
-            console.log('Volume control elements not found');
-            return;
-        }
-        
-        // Load current system volume
-        loadInitialVolume();
-        
-        // Volume slider event listener
-        volumeSlider.addEventListener('input', (e) => {
-            const volume = e.target.value;
-            updateVolumeDisplay(volume);
-            setVolume(volume);
-            localStorage.setItem('instagram-volume', volume);
-        });
-        
-        // Volume icon click to mute/unmute
-        volumeIcon.addEventListener('click', async () => {
-            try {
-                const response = await fetch('http://localhost:3000/api/volume/toggle-mute', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Update UI based on mute state
-                    if (data.muted) {
-                        volumeIcon.textContent = '🔇';
-                        showNotification('🔇 System muted');
-                    } else {
-                        // Get current volume to update icon
-                        const volumeResponse = await fetch('http://localhost:3000/api/volume');
-                        const volumeData = await volumeResponse.json();
-                        if (volumeData.success) {
-                            volumeSlider.value = volumeData.volume;
-                            updateVolumeDisplay(volumeData.volume);
-                            localStorage.setItem('instagram-volume', volumeData.volume);
-                        }
-                        showNotification('🔊 System unmuted');
-                    }
-                } else {
-                    console.error('Failed to toggle mute:', data.error);
-                    showNotification('❌ Failed to toggle mute', 'error');
-                }
-            } catch (error) {
-                console.error('Error toggling mute:', error);
-                showNotification('❌ Mute control unavailable', 'error');
-            }
-        });
-    }
-    
-    async function loadInitialVolume() {
-        try {
-            const response = await fetch('http://localhost:3000/api/volume');
-            const data = await response.json();
-            
-            if (data.success) {
-                volumeSlider.value = data.volume;
-                updateVolumeDisplay(data.volume);
-                localStorage.setItem('instagram-volume', data.volume);
-                
-                // Update mute icon if system is muted
-                if (data.muted) {
-                    volumeIcon.textContent = '🔇';
-                }
-                
-                console.log('Loaded system volume:', data.volume + '%', 'Platform:', data.platform);
-                showNotification('🔊 Connected to ' + data.platform, 'success');
-            } else {
-                console.error('Failed to get system volume:', data.error);
-                // Fall back to saved volume
-                const savedVolume = localStorage.getItem('instagram-volume') || '75';
-                volumeSlider.value = savedVolume;
-                updateVolumeDisplay(savedVolume);
-                showNotification('⚠️ Using saved volume - system control unavailable', 'warning');
-            }
-        } catch (error) {
-            console.error('Error loading system volume:', error);
-            // Fall back to saved volume
-            const savedVolume = localStorage.getItem('instagram-volume') || '75';
-            volumeSlider.value = savedVolume;
-            updateVolumeDisplay(savedVolume);
-            showNotification('⚠️ System volume unavailable - using saved settings', 'warning');
-        }
-    }
-    
     function setupKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
             // Skip if user is typing in an input field
             if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
             if (e.target.tagName === 'TEXTAREA') return;
             
-            switch(e.key.toLowerCase()) {
-                case 'arrowleft':
-                    e.preventDefault();
-                    adjustVolume(-5);
-                    break;
-                case 'arrowright':
-                    e.preventDefault();
-                    adjustVolume(5);
-                    break;
-                case 'm':
-                    e.preventDefault();
-                    volumeIcon.click();
-                    break;
-                case '0':
-                case '1':
-                case '2':
-                case '3':
-                case '4':
-                case '5':
-                case '6':
-                case '7':
-                case '8':
-                case '9':
-                    e.preventDefault();
-                    const volume = parseInt(e.key) * 10;
-                    setVolumeLevel(volume);
-                    break;
-                case 'd':
-                    e.preventDefault();
-                    debugVolumeControl();
-                    break;
-            }
+            // No keyboard shortcuts currently implemented
         });
-    }
-    
-    function updateVolumeDisplay(volume) {
-        volumePercentage.textContent = volume + '%';
-        
-        if (volume == 0) {
-            volumeIcon.textContent = '🔇';
-        } else if (volume < 30) {
-            volumeIcon.textContent = '🔉';
-        } else {
-            volumeIcon.textContent = '🔊';
-        }
-    }
-    
-    async function setVolume(volume) {
-        try {
-            // Use system volume control via API
-            const response = await fetch('http://localhost:3000/api/volume', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ volume: volume })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                console.log('System volume set to:', volume + '%');
-                
-                // Show success notification on first volume change
-                if (volume === 75) { // Only show on first load
-                    showNotification('🔊 Controlling system volume - ' + (data.platform || 'Unknown platform'), 'success');
-                }
-            } else {
-                console.error('Failed to set system volume:', data.error);
-                showNotification('❌ Failed to control system volume', 'error');
-            }
-            
-        } catch (error) {
-            console.error('Error setting system volume:', error);
-            showNotification('❌ Volume control unavailable', 'error');
-        }
-    }
-    
-    async function adjustVolume(delta) {
-        try {
-            const response = await fetch('http://localhost:3000/api/volume/adjust', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ delta: delta })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                volumeSlider.value = data.volume;
-                updateVolumeDisplay(data.volume);
-                localStorage.setItem('instagram-volume', data.volume);
-                
-                // Show brief volume feedback
-                showNotification('Volume: ' + data.volume + '%');
-            } else {
-                console.error('Failed to adjust volume:', data.error);
-                showNotification('❌ Failed to adjust volume', 'error');
-            }
-        } catch (error) {
-            console.error('Error adjusting volume:', error);
-            showNotification('❌ Volume adjustment unavailable', 'error');
-        }
-    }
-    
-    async function setVolumeLevel(volume) {
-        try {
-            const success = await setVolume(volume);
-            if (success !== false) {
-                volumeSlider.value = volume;
-                updateVolumeDisplay(volume);
-                localStorage.setItem('instagram-volume', volume);
-                
-                showNotification('Volume: ' + volume + '%');
-            }
-        } catch (error) {
-            console.error('Error setting volume level:', error);
-            showNotification('❌ Failed to set volume level', 'error');
-        }
     }
     
     // Message handling from extension
@@ -387,22 +170,15 @@
         mainContent.style.display = 'none';
         errorScreen.style.display = 'none';
         
-        // Hide volume control by default
-        if (volumeControl) {
-            volumeControl.style.display = 'none';
-        }
-        
         // Show requested screen
         const screen = document.getElementById(screenName);
         if (screen) {
             screen.style.display = 'flex';
             
-            // Show volume control when main content is visible
-            if (screenName === 'main-content' && volumeControl) {
-                volumeControl.style.display = 'flex';
-            }
+            console.log('Showing screen:', screenName);
         } else {
             console.error('Screen not found:', screenName);
+            showScreen('error');
         }
     }
     
@@ -413,7 +189,6 @@
     
     function setLoading(loading) {
         isLoading = loading;
-        console.log('Loading state:', loading);
     }
     
     function sendMessage(message) {
@@ -421,63 +196,31 @@
     }
     
     function showNotification(text, type = 'success') {
-        // Remove existing notifications
-        const existingNotifications = document.querySelectorAll('.notification');
-        existingNotifications.forEach(n => n.remove());
+        console.log(`[${type.toUpperCase()}] ${text}`);
         
-        // Create new notification
+        // Create notification element
         const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
+        notification.className = `notification notification-${type}`;
         notification.textContent = text;
         
+        // Add to DOM
         document.body.appendChild(notification);
         
-        // Remove after 3 seconds
+        // Auto remove after 3 seconds
         setTimeout(() => {
-            notification.remove();
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
         }, 3000);
     }
     
-    // Utility functions
     function formatNumber(num) {
         if (num >= 1000000) {
             return (num / 1000000).toFixed(1) + 'M';
-        }
-        if (num >= 1000) {
+        } else if (num >= 1000) {
             return (num / 1000).toFixed(1) + 'K';
         }
         return num.toString();
     }
-    
 
-    
-    // Debug function to test volume control
-    function debugVolumeControl() {
-        console.log('=== DEBUG VOLUME CONTROL ===');
-        console.log('Instagram iframe element:', instagramIframe);
-        console.log('Instagram iframe src:', instagramIframe ? instagramIframe.src : 'N/A');
-        console.log('Volume control elements present:', {
-            volumeSlider: !!volumeSlider,
-            volumeIcon: !!volumeIcon,
-            volumePercentage: !!volumePercentage
-        });
-        
-        // Test volume setting
-        console.log('Testing volume setting to 50%...');
-        setVolume(50);
-        
-        showNotification('🔍 Check console for volume debug info', 'warning');
-    }
-
-    // Export for debugging
-    window.debugReelsViewer = {
-        currentReel,
-        isLoading,
-        sendMessage,
-        showNotification,
-        setLoading,
-        loadReel,
-        debugVolumeControl,
-        setVolume
-    };
 })(); 

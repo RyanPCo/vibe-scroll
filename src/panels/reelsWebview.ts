@@ -219,16 +219,9 @@ export class ReelsWebviewPanel {
                         </div>
                     </div>
                     
-                                         <div id="main-content" class="main-content" style="display: none;">
-                         <iframe id="instagram-iframe" src="http://localhost:3000" style="width: 100%; height: 100vh; border: none;"></iframe>
-                         
-                         <!-- Volume Control
-                         <div class="volume-control" id="volume-control">
-                             <span class="volume-icon" id="volume-icon">🔊</span>
-                             <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="75">
-                             <span class="volume-percentage" id="volume-percentage">75%</span>
-                         </div>  -->
-                     </div>
+                    <div id="main-content" class="main-content" style="display: none;">
+                        <iframe id="instagram-iframe" src="http://localhost:3000" style="width: 100%; height: 100vh; border: none;"></iframe>
+                    </div>
                     
                     <div id="error" class="error-screen" style="display: none;">
                         <div class="error-content">

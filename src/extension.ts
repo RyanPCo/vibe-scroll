@@ -2,11 +2,9 @@ import * as vscode from 'vscode';
 import { PuppeteerController } from './controller/puppeteerController';
 import { ReelsWebviewPanel } from './panels/reelsWebview';
 import { MediaBridge } from './server/mediaBridge';
-import { VolumeService } from './services/volumeService';
 
 let puppeteerController: PuppeteerController | undefined;
 let mediaBridge: MediaBridge | undefined;
-let volumeService: VolumeService | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('🎬 Instagram Reels Viewer extension is now active!');
@@ -61,11 +59,6 @@ async function startInstagramReelsViewer(context: vscode.ExtensionContext) {
                 console.log('🚀 Starting controller initialization...');
                 await puppeteerController.initialize();
 
-                progress.report({ increment: 30, message: "Initializing volume service..." });
-
-                // Initialize volume service
-                volumeService = new VolumeService();
-
                 progress.report({ increment: 50, message: "Starting media bridge server..." });
 
                 // Initialize media bridge (optional)
@@ -76,8 +69,6 @@ async function startInstagramReelsViewer(context: vscode.ExtensionContext) {
                     });
                     // Set the puppeteer controller for the media bridge
                     mediaBridge.setPuppeteerController(puppeteerController);
-                    // Set the volume service for the media bridge
-                    mediaBridge.setVolumeService(volumeService);
                     await mediaBridge.start();
                 } catch (error) {
                     console.warn('Failed to start media bridge:', error);
@@ -167,11 +158,6 @@ async function cleanup() {
             mediaBridge = undefined;
         }
 
-        // Clean up volume service
-        if (volumeService) {
-            volumeService = undefined;
-        }
-
         console.log('✅ Cleanup completed');
     } catch (error) {
         console.error('Error during cleanup:', error);
@@ -183,4 +169,4 @@ export function deactivate() {
 }
 
 // Export for testing
-export { puppeteerController, mediaBridge, volumeService }; 
+export { puppeteerController, mediaBridge }; 
