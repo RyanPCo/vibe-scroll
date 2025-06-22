@@ -18,8 +18,14 @@ export class PuppeteerController extends EventEmitter {
     private browser: puppeteer.Browser | null = null;
     private page: puppeteer.Page | null = null;
     private cookiesPath: string;
-    private isLoggedIn: boolean = false;
     private currentReelIndex: number = 0;
+    private reelIdQueue: string[] = [];
+    private isCollectingReels: boolean = false;
+    private reelCollectionCount: number = 0;
+    private maxReelsBeforeReload: number = 3;
+    private collectionPage: puppeteer.Page | null = null;
+    private minBufferSize: number = 5; // Always keep at least 5 reels ahead
+    private isBackgroundCollecting: boolean = false;
 
     constructor(extensionPath: string) {
         super();
@@ -52,7 +58,7 @@ export class PuppeteerController extends EventEmitter {
             }
 
             this.browser = await puppeteer.launch({
-                headless: false, // Set to true for production
+                headless: true, // Running headlessly for better performance
                 defaultViewport: { width: 1280, height: 720 },
                 executablePath, // Use system Chrome if available
                 args: [
@@ -64,7 +70,10 @@ export class PuppeteerController extends EventEmitter {
                     '--no-zygote',
                     '--disable-gpu',
                     '--disable-web-security',
-                    '--disable-features=VizDisplayCompositor'
+                    '--disable-features=VizDisplayCompositor',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding'
                 ]
             });
 
@@ -84,74 +93,32 @@ export class PuppeteerController extends EventEmitter {
     }
 
     async loadCookies(): Promise<void> {
-        try {
-            // First navigate to Instagram to set domain for cookies
-            await this.page!.goto('https://www.instagram.com', { waitUntil: 'domcontentloaded' });
-            
-            // Set the specific sessionid cookie
-            const sessionCookie = {
-                name: 'sessionid',
-                value: '75619196791%3AGvXksZhHYAh1xa%3A1%3AAYcBNg7pqIRxWz0x5OLtRdrMavKXj1cnvgUtA9-JYg',
-                domain: '.instagram.com',
-                path: '/',
-                httpOnly: true,
-                secure: true,
-                sameSite: 'None' as const
-            };
-            
-            await this.page!.setCookie(sessionCookie);
-            console.log('Session cookie set successfully');
-            
-            // Load additional cookies from file if they exist
-            if (fs.existsSync(this.cookiesPath)) {
-                const cookiesString = fs.readFileSync(this.cookiesPath, 'utf8');
-                const cookies = JSON.parse(cookiesString);
-                await this.page!.setCookie(...cookies);
-                console.log('Additional cookies loaded from file');
-            }
-            
-            this.isLoggedIn = true;
-            console.log('Cookies loaded successfully');
-        } catch (error) {
-            console.error('Failed to load cookies:', error);
-        }
+        // No longer using cookies/session - using reload-based approach
+        console.log('Skipping cookie loading - using anonymous access with reloads');
     }
 
     async saveCookies(): Promise<void> {
-        try {
-            const cookies = await this.page!.cookies();
-            fs.mkdirSync(path.dirname(this.cookiesPath), { recursive: true });
-            fs.writeFileSync(this.cookiesPath, JSON.stringify(cookies, null, 2));
-            console.log('Cookies saved successfully');
-        } catch (error) {
-            console.error('Failed to save cookies:', error);
-        }
+        // No longer saving cookies
+        console.log('Skipping cookie saving - using anonymous access');
     }
 
     async navigateToReels(): Promise<void> {
         try {
-            console.log('Navigating to Instagram Reels...');
+            console.log('Navigating to Instagram Reels (anonymous access)...');
             await this.page!.goto('https://www.instagram.com/reels/', { 
                 waitUntil: 'networkidle2',
                 timeout: 30000 
             });
 
-            // Wait for login redirect or reels to load
-            await this.page!.waitForTimeout(3000);
-
-            // Check if we need to login
-            const currentUrl = this.page!.url();
-            if (currentUrl.includes('/accounts/login/')) {
-                console.log('Login required');
-                this.isLoggedIn = false;
-                this.emit('loginRequired');
-                return;
-            }
-
             // Wait for reels to load
+            await this.page!.waitForTimeout(3000);
             await this.waitForReelsToLoad();
-            this.isLoggedIn = true;
+            
+            console.log('Reels loaded - starting reel collection');
             this.emit('reelsLoaded');
+            
+            // Start collecting reel IDs
+            this.startReelCollection();
         } catch (error) {
             console.error('Failed to navigate to reels:', error);
             this.emit('error', error);
@@ -171,35 +138,56 @@ export class PuppeteerController extends EventEmitter {
 
     async getCurrentReelInfo(): Promise<ReelData | null> {
         try {
-            if (!this.page || !this.isLoggedIn) {
+            if (!this.page) {
                 return null;
             }
 
-            // Get current URL to extract reel ID
+            // Return reel from queue if available
+            const currentReelId = this.reelIdQueue[this.currentReelIndex];
+            if (currentReelId) {
+                const reelUrl = `https://www.instagram.com/reel/${currentReelId}/`;
+                console.log(`Using queued reel ID: ${currentReelId}`);
+                
+                return {
+                    reelId: currentReelId,
+                    reelUrl,
+                    caption: '',
+                    username: '',
+                    likes: '',
+                    comments: '',
+                    hashtags: [],
+                    profilePicture: ''
+                };
+            }
+
+            // If no queued reel, try to extract from current page
             const currentUrl = this.page.url();
-            // split by / and get last nonempty entry
             const reelIdMatch = currentUrl.split('/').filter(Boolean).pop();
             
-            if (!reelIdMatch) {
-                console.error('Could not extract reel ID from URL:', currentUrl);
-                return null;
+            if (reelIdMatch && reelIdMatch !== 'reels') {
+                const reelId = reelIdMatch;
+                const reelUrl = `https://www.instagram.com/reel/${reelId}/`;
+                
+                console.log(`Extracted reel ID from current page: ${reelId}`);
+                
+                // Add to queue if not already there
+                if (!this.reelIdQueue.includes(reelId)) {
+                    this.reelIdQueue.push(reelId);
+                }
+                
+                return {
+                    reelId,
+                    reelUrl,
+                    caption: '',
+                    username: '',
+                    likes: '',
+                    comments: '',
+                    hashtags: [],
+                    profilePicture: ''
+                };
             }
 
-            const reelId = reelIdMatch;
-            const reelUrl = `https://www.instagram.com/reel/${reelId}/`;
-            
-            console.log(`Extracted reel ID: ${reelId} from URL: ${currentUrl}`);
-
-            return {
-                reelId,
-                reelUrl,
-                caption: '',
-                username: '',
-                likes: '',
-                comments: '',
-                hashtags: [],
-                profilePicture: ''
-            };
+            return null;
         } catch (error) {
             console.error('Failed to get current reel info:', error);
             return null;
@@ -208,17 +196,21 @@ export class PuppeteerController extends EventEmitter {
 
     async scrollToNextReel(): Promise<void> {
         try {
-            if (!this.page || !this.isLoggedIn) {
-                throw new Error('Page not initialized or not logged in');
+            if (!this.page) {
+                throw new Error('Page not initialized');
             }
 
-            // Scroll down to next reel
-            await this.page.keyboard.press('ArrowDown');
-            
-            // Wait for new reel to load
-            await this.page.waitForTimeout(2000);
-            
             this.currentReelIndex++;
+            
+            // If we've run out of reels, wait for immediate collection
+            if (this.currentReelIndex >= this.reelIdQueue.length) {
+                console.log('Out of reels - immediate collection needed');
+                await this.collectMoreReels();
+            } else {
+                // Always trigger background collection to maintain buffer
+                this.triggerBackgroundCollection();
+            }
+            
             this.emit('reelChanged', this.currentReelIndex);
         } catch (error) {
             console.error('Failed to scroll to next reel:', error);
@@ -228,16 +220,10 @@ export class PuppeteerController extends EventEmitter {
 
     async scrollToPreviousReel(): Promise<void> {
         try {
-            if (!this.page || !this.isLoggedIn) {
-                throw new Error('Page not initialized or not logged in');
+            if (!this.page) {
+                throw new Error('Page not initialized');
             }
 
-            // Scroll up to previous reel
-            await this.page.keyboard.press('ArrowUp');
-            
-            // Wait for reel to load
-            await this.page.waitForTimeout(2000);
-            
             this.currentReelIndex = Math.max(0, this.currentReelIndex - 1);
             this.emit('reelChanged', this.currentReelIndex);
         } catch (error) {
@@ -246,10 +232,168 @@ export class PuppeteerController extends EventEmitter {
         }
     }
 
+    private async startReelCollection(): Promise<void> {
+        try {
+            console.log('Starting initial reel collection...');
+            await this.collectReelsFromCurrentPage();
+            
+            // Immediately start background collection to build buffer
+            console.log('Starting initial background collection to build buffer...');
+            this.triggerBackgroundCollection();
+        } catch (error) {
+            console.error('Failed to start reel collection:', error);
+        }
+    }
+
+    private async collectMoreReels(): Promise<void> {
+        try {
+            console.log('Collecting more reels by reloading page...');
+            await this.page!.reload({ waitUntil: 'networkidle2' });
+            await this.page!.waitForTimeout(3000);
+            await this.waitForReelsToLoad();
+            await this.collectReelsFromCurrentPage();
+        } catch (error) {
+            console.error('Failed to collect more reels:', error);
+        }
+    }
+
+    private triggerBackgroundCollection(): void {
+        // Check if we need more reels in buffer
+        const remainingReels = this.reelIdQueue.length - this.currentReelIndex;
+        
+        if (remainingReels <= this.minBufferSize && !this.isBackgroundCollecting) {
+            console.log(`Buffer low (${remainingReels} remaining), starting background collection...`);
+            this.startBackgroundCollection();
+        }
+    }
+
+    private async startBackgroundCollection(): Promise<void> {
+        if (this.isBackgroundCollecting || !this.browser) {
+            return;
+        }
+
+        try {
+            this.isBackgroundCollecting = true;
+            console.log('Starting background reel collection...');
+
+            // Create a separate page for background collection
+            this.collectionPage = await this.browser.newPage();
+            
+            // Set same user agent
+            await this.collectionPage.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+            
+            // Navigate to reels page
+            await this.collectionPage.goto('https://www.instagram.com/reels/', { 
+                waitUntil: 'networkidle2',
+                timeout: 15000 
+            });
+            
+            await this.collectionPage.waitForTimeout(3000);
+            await this.collectionPage.waitForSelector('video', { timeout: 15000 });
+            
+            // Collect reels in background
+            await this.collectReelsFromBackgroundPage();
+            
+        } catch (error) {
+            console.error('Failed to start background collection:', error);
+        } finally {
+            // Clean up background page
+            if (this.collectionPage) {
+                try {
+                    await this.collectionPage.close();
+                } catch (e) {
+                    console.error('Error closing collection page:', e);
+                }
+                this.collectionPage = null;
+            }
+            this.isBackgroundCollecting = false;
+        }
+    }
+
+    private async collectReelsFromBackgroundPage(): Promise<void> {
+        try {
+            if (!this.collectionPage) return;
+            
+            let collectedCount = 0;
+            const targetCount = 8; // Collect more reels in background
+            
+            // Collect reels by scrolling through the page
+            for (let i = 0; i < targetCount; i++) {
+                try {
+                    // Wait for current reel to load
+                    await this.collectionPage.waitForTimeout(1500);
+                    
+                    // Extract reel ID from current URL
+                    const currentUrl = this.collectionPage.url();
+                    const reelIdMatch = currentUrl.split('/').filter(Boolean).pop();
+                    
+                    if (reelIdMatch && reelIdMatch !== 'reels' && !this.reelIdQueue.includes(reelIdMatch)) {
+                        this.reelIdQueue.push(reelIdMatch);
+                        collectedCount++;
+                        console.log(`Background collected reel ID: ${reelIdMatch} (${collectedCount}/8, total queue: ${this.reelIdQueue.length})`);
+                    }
+                    
+                    // Scroll to next reel
+                    if (i < targetCount - 1) {
+                        await this.collectionPage.keyboard.press('ArrowDown');
+                    }
+                } catch (error) {
+                    console.error('Error collecting reel in background at position', i, error);
+                    // Continue collecting even if one fails
+                }
+            }
+            
+            console.log(`Background collection completed: ${collectedCount} new reels. Total in queue: ${this.reelIdQueue.length}`);
+            this.emit('reelsCollected', { collected: collectedCount, total: this.reelIdQueue.length });
+        } catch (error) {
+            console.error('Failed to collect reels from background page:', error);
+        }
+    }
+
+    private async collectReelsFromCurrentPage(): Promise<void> {
+        try {
+            this.isCollectingReels = true;
+            let collectedCount = 0;
+            
+            // Collect reels by scrolling through the page
+            for (let i = 0; i < this.maxReelsBeforeReload && collectedCount < 10; i++) {
+                try {
+                    // Wait for current reel to load
+                    await this.page!.waitForTimeout(1500);
+                    
+                    // Extract reel ID from current URL
+                    const currentUrl = this.page!.url();
+                    const reelIdMatch = currentUrl.split('/').filter(Boolean).pop();
+                    
+                    if (reelIdMatch && reelIdMatch !== 'reels' && !this.reelIdQueue.includes(reelIdMatch)) {
+                        this.reelIdQueue.push(reelIdMatch);
+                        collectedCount++;
+                        console.log(`Collected reel ID: ${reelIdMatch} (${collectedCount} total in queue: ${this.reelIdQueue.length})`);
+                    }
+                    
+                    // Scroll to next reel
+                    if (i < this.maxReelsBeforeReload - 1) {
+                        await this.page!.keyboard.press('ArrowDown');
+                    }
+                } catch (error) {
+                    console.error('Error collecting reel at position', i, error);
+                    break;
+                }
+            }
+            
+            console.log(`Collected ${collectedCount} new reels. Total in queue: ${this.reelIdQueue.length}`);
+            this.emit('reelsCollected', { collected: collectedCount, total: this.reelIdQueue.length });
+        } catch (error) {
+            console.error('Failed to collect reels from current page:', error);
+        } finally {
+            this.isCollectingReels = false;
+        }
+    }
+
     async likeCurrentReel(): Promise<void> {
         try {
-            if (!this.page || !this.isLoggedIn) {
-                throw new Error('Page not initialized or not logged in');
+            if (!this.page) {
+                throw new Error('Page not initialized');
             }
 
             // Find and click like button
@@ -266,8 +410,8 @@ export class PuppeteerController extends EventEmitter {
 
     async saveCurrentReel(): Promise<void> {
         try {
-            if (!this.page || !this.isLoggedIn) {
-                throw new Error('Page not initialized or not logged in');
+            if (!this.page) {
+                throw new Error('Page not initialized');
             }
 
             // Find and click save button
@@ -284,8 +428,13 @@ export class PuppeteerController extends EventEmitter {
 
     async openCurrentReelInBrowser(): Promise<string> {
         try {
-            if (!this.page || !this.isLoggedIn) {
-                throw new Error('Page not initialized or not logged in');
+            if (!this.page) {
+                throw new Error('Page not initialized');
+            }
+
+            const currentReelId = this.reelIdQueue[this.currentReelIndex];
+            if (currentReelId) {
+                return `https://www.instagram.com/reel/${currentReelId}/`;
             }
 
             return this.page.url();
@@ -295,46 +444,53 @@ export class PuppeteerController extends EventEmitter {
         }
     }
 
-    async performLogin(): Promise<void> {
-        try {
-            if (!this.page) {
-                throw new Error('Page not initialized');
-            }
+    getReelQueueSize(): number {
+        return this.reelIdQueue.length;
+    }
 
-            // Navigate to login page
-            await this.page.goto('https://www.instagram.com/accounts/login/', {
-                waitUntil: 'networkidle2'
-            });
+    getCurrentReelIndex(): number {
+        return this.currentReelIndex;
+    }
 
-            // Wait for user to login manually
-            console.log('Please login manually in the browser window...');
-            this.emit('manualLoginRequired');
+    getBufferStatus(): { remaining: number, total: number, isCollecting: boolean } {
+        return {
+            remaining: this.reelIdQueue.length - this.currentReelIndex,
+            total: this.reelIdQueue.length,
+            isCollecting: this.isBackgroundCollecting
+        };
+    }
 
-            // Wait for login to complete (redirect to main page)
-            await this.page.waitForNavigation({ 
-                waitUntil: 'networkidle2',
-                timeout: 300000 // 5 minutes timeout for manual login
-            });
-
-            // Save cookies after successful login
-            await this.saveCookies();
-            this.isLoggedIn = true;
-            
-            // Navigate to reels
-            await this.navigateToReels();
-        } catch (error) {
-            console.error('Login failed:', error);
-            this.emit('error', error);
-        }
+    getQueueDebugInfo(): { queue: string[], currentIndex: number, bufferStatus: any } {
+        return {
+            queue: [...this.reelIdQueue], // Copy of the queue
+            currentIndex: this.currentReelIndex,
+            bufferStatus: this.getBufferStatus()
+        };
     }
 
     async cleanup(): Promise<void> {
         try {
+            // Stop background collection
+            this.isBackgroundCollecting = false;
+            
+            // Close collection page if open
+            if (this.collectionPage) {
+                try {
+                    await this.collectionPage.close();
+                } catch (e) {
+                    console.error('Error closing collection page during cleanup:', e);
+                }
+                this.collectionPage = null;
+            }
+            
+            // Close main browser
             if (this.browser) {
                 await this.browser.close();
                 this.browser = null;
                 this.page = null;
             }
+            
+            this.reelIdQueue = [];
         } catch (error) {
             console.error('Failed to cleanup browser:', error);
         }
@@ -342,9 +498,5 @@ export class PuppeteerController extends EventEmitter {
 
     isInitialized(): boolean {
         return this.browser !== null && this.page !== null;
-    }
-
-    getLoginStatus(): boolean {
-        return this.isLoggedIn;
     }
 } 

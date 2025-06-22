@@ -39,6 +39,30 @@ export class MediaBridge extends EventEmitter {
                 this.updateCurrentReel(reelData.reelId);
             }
         });
+        
+        // Listen for reel collection events
+        controller.on('reelsCollected', (data: any) => {
+            console.log(`Reels collected: ${data.collected} new, ${data.total} total in queue`);
+            this.broadcast({ 
+                type: 'reels-collected', 
+                collected: data.collected,
+                total: data.total,
+                queueSize: controller.getReelQueueSize(),
+                debugInfo: controller.getQueueDebugInfo()
+            });
+        });
+
+        // Listen for reel changes and send debug info
+        controller.on('reelChanged', async () => {
+            const reelData = await controller.getCurrentReelInfo();
+            if (reelData) {
+                this.updateCurrentReel(reelData.reelId);
+                this.broadcast({
+                    type: 'reel-changed',
+                    debugInfo: controller.getQueueDebugInfo()
+                });
+            }
+        });
     }
 
     private setupRoutes(): void {
@@ -161,6 +185,21 @@ export class MediaBridge extends EventEmitter {
             } catch (error) {
                 console.error('Error refreshing reel:', error);
                 res.status(500).json({ error: 'Failed to refresh reel' });
+            }
+        });
+
+        // Debug endpoint to get queue info
+        this.app.get('/api/debug/queue', (req, res) => {
+            try {
+                if (this.puppeteerController) {
+                    const debugInfo = this.puppeteerController.getQueueDebugInfo();
+                    res.json({ success: true, ...debugInfo });
+                } else {
+                    res.status(503).json({ error: 'Puppeteer controller not available' });
+                }
+            } catch (error) {
+                console.error('Error getting queue debug info:', error);
+                res.status(500).json({ error: 'Failed to get queue info' });
             }
         });
 
@@ -327,6 +366,143 @@ export class MediaBridge extends EventEmitter {
             background: #f44336;
         }
         
+        /* Collection Indicator */
+        .preload-indicator {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .preload-indicator.show {
+            opacity: 1;
+        }
+        
+        .preload-indicator .spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid #fff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Debug Panel */
+        .debug-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 300px;
+            max-height: 80vh;
+            background: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            z-index: 2000;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .debug-panel h3 {
+            margin: 0 0 10px 0;
+            color: #4caf50;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .debug-stats {
+            margin-bottom: 15px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        
+        .debug-stats div {
+            margin: 3px 0;
+        }
+        
+        .debug-queue {
+            max-height: 50vh;
+            overflow-y: auto;
+        }
+        
+        .queue-item {
+            padding: 4px 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            font-size: 10px;
+            word-break: break-all;
+            position: relative;
+        }
+        
+        .queue-item.current {
+            background: #4caf50;
+            color: #000;
+            font-weight: bold;
+        }
+        
+        .queue-item.viewed {
+            background: rgba(255, 255, 255, 0.05);
+            color: #888;
+        }
+        
+        .queue-item .index {
+            display: inline-block;
+            width: 20px;
+            color: #ccc;
+            font-size: 9px;
+        }
+        
+        .debug-panel.minimized {
+            width: 60px;
+            height: 60px;
+            padding: 8px;
+            cursor: pointer;
+        }
+        
+        .debug-panel.minimized h3 {
+            font-size: 10px;
+            margin: 0;
+        }
+        
+        .debug-panel.minimized .debug-content {
+            display: none;
+        }
+        
+        .debug-toggle {
+            position: absolute;
+            top: 5px;
+            right: 8px;
+            background: none;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+        }
+        
         /* Responsive */
         @media (max-width: 480px) {
             .nav-btn {
@@ -353,6 +529,18 @@ export class MediaBridge extends EventEmitter {
                 height: 40px;
                 font-size: 16px;
             }
+            
+            .debug-panel {
+                width: calc(100vw - 20px);
+                right: 10px;
+                max-height: 50vh;
+                font-size: 10px;
+            }
+            
+            .debug-panel.minimized {
+                width: 50px;
+                height: 50px;
+            }
         }
     </style>
 </head>
@@ -361,6 +549,11 @@ export class MediaBridge extends EventEmitter {
         <button id="prev-btn" class="nav-btn nav-btn-left">⬆</button>
         
         <div class="loading" id="loading">Loading Instagram Reel...</div>
+        
+        <div class="preload-indicator" id="preload-indicator">
+            <div class="spinner"></div>
+            <span>Building reel buffer...</span>
+        </div>
         
         <div class="embed-wrapper">
             <blockquote class="instagram-media" data-instgrm-captioned data-instgrm-permalink="${reelUrl}?utm_source=ig_embed&amp;utm_campaign=loading" data-instgrm-version="14" style="background:#FFF; border:0; border-radius:3px; box-shadow:0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15); margin: 1px; max-width:540px; min-width:326px; padding:0; width:99.375%; width:-webkit-calc(100% - 2px); width:calc(100% - 2px);">
@@ -427,14 +620,183 @@ export class MediaBridge extends EventEmitter {
         </div>
     </div>
     
+    <!-- Debug Panel 
+    <div class="debug-panel" id="debug-panel">
+        <button class="debug-toggle" id="debug-toggle">−</button>
+        <h3>Reel Queue Debug</h3>
+        <div class="debug-content">
+            <div class="debug-stats" id="debug-stats">
+                <div>Current Index: <span id="current-index">0</span></div>
+                <div>Total Reels: <span id="total-reels">0</span></div>
+                <div>Remaining: <span id="remaining-reels">0</span></div>
+                <div>Collecting: <span id="is-collecting">No</span></div>
+            </div>
+            <div class="debug-queue" id="debug-queue">
+                <!-- Queue items will be populated by JavaScript -->
+            </div>
+        </div>
+    </div> -->
+    
     <script async src="//www.instagram.com/embed.js" onload="initializeApp()"></script>
     <script>
         let isLoading = false;
+        let preloadCount = 0;
         
         function initializeApp() {
             document.getElementById('loading').style.display = 'none';
             setupEventListeners();
             setupKeyboardShortcuts();
+            setupWebSocket();
+            setupDebugPanel();
+            loadInitialDebugInfo();
+        }
+        
+        function setupWebSocket() {
+            try {
+                const ws = new WebSocket('ws://localhost:3000');
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (error) {
+                        console.error('Error parsing WebSocket message:', error);
+                    }
+                };
+                
+                ws.onopen = () => {
+                    console.log('WebSocket connected');
+                };
+                
+                ws.onclose = () => {
+                    console.log('WebSocket disconnected');
+                    // Attempt to reconnect after a delay
+                    setTimeout(setupWebSocket, 3000);
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                };
+            } catch (error) {
+                console.error('Error setting up WebSocket:', error);
+            }
+        }
+        
+        function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'reels-collected':
+                    handleReelsCollected(data);
+                    break;
+                case 'reel-changed':
+                    // Hide collection indicator when reel changes
+                    hidePreloadIndicator();
+                    // Update debug panel
+                    if (data.debugInfo) {
+                        updateDebugPanel(data.debugInfo);
+                    }
+                    break;
+                default:
+                    console.log('Unknown WebSocket message:', data);
+            }
+        }
+        
+        function handleReelsCollected(data) {
+            const queueSize = data.queueSize || data.total || 0;
+            console.log('Reels collected: ' + data.collected + ' new, ' + queueSize + ' total in queue');
+            
+            // Show brief notification only for significant collections
+            if (data.collected > 0) {
+                // showNotification('Buffer updated: ' + queueSize + ' reels ready! 🎬', 'success');
+            }
+            
+            // Update debug panel
+            if (data.debugInfo) {
+                updateDebugPanel(data.debugInfo);
+            }
+            
+            // Hide the collection indicator
+            hidePreloadIndicator();
+        }
+        
+        function setupDebugPanel() {
+            const debugToggle = document.getElementById('debug-toggle');
+            const debugPanel = document.getElementById('debug-panel');
+            
+            debugToggle.addEventListener('click', () => {
+                debugPanel.classList.toggle('minimized');
+                debugToggle.textContent = debugPanel.classList.contains('minimized') ? '+' : '−';
+            });
+            
+            // Click to expand when minimized
+            debugPanel.addEventListener('click', () => {
+                if (debugPanel.classList.contains('minimized')) {
+                    debugPanel.classList.remove('minimized');
+                    debugToggle.textContent = '−';
+                }
+            });
+        }
+        
+        function loadInitialDebugInfo() {
+            fetch('/api/debug/queue')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateDebugPanel(data);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading initial debug info:', error);
+                });
+        }
+        
+        function updateDebugPanel(debugInfo) {
+            try {
+                // Update stats
+                document.getElementById('current-index').textContent = debugInfo.currentIndex;
+                document.getElementById('total-reels').textContent = debugInfo.queue.length;
+                document.getElementById('remaining-reels').textContent = debugInfo.bufferStatus.remaining;
+                document.getElementById('is-collecting').textContent = debugInfo.bufferStatus.isCollecting ? 'Yes' : 'No';
+                
+                // Update queue display
+                const queueContainer = document.getElementById('debug-queue');
+                queueContainer.innerHTML = '';
+                
+                debugInfo.queue.forEach((reelId, index) => {
+                    const queueItem = document.createElement('div');
+                    queueItem.className = 'queue-item';
+                    
+                    // Add status classes
+                    if (index === debugInfo.currentIndex) {
+                        queueItem.classList.add('current');
+                    } else if (index < debugInfo.currentIndex) {
+                        queueItem.classList.add('viewed');
+                    }
+                    
+                    // Truncate reel ID for display
+                    const displayId = reelId.length > 20 ? reelId.substring(0, 20) + '...' : reelId;
+                    
+                    queueItem.innerHTML = '<span class="index">' + index + ':</span> ' + displayId;
+                    queueContainer.appendChild(queueItem);
+                });
+                
+                // Scroll current reel into view
+                const currentItem = queueContainer.querySelector('.queue-item.current');
+                if (currentItem) {
+                    currentItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            } catch (error) {
+                console.error('Error updating debug panel:', error);
+            }
+        }
+        
+        function showPreloadIndicator() {
+            const indicator = document.getElementById('preload-indicator');
+            indicator.classList.add('show');
+        }
+        
+        function hidePreloadIndicator() {
+            const indicator = document.getElementById('preload-indicator');
+            indicator.classList.remove('show');
         }
         
         function setupEventListeners() {
@@ -510,6 +872,12 @@ export class MediaBridge extends EventEmitter {
             
             try {
                 setLoading(true);
+                
+                // Show collection indicator for next reel navigation (triggers buffer maintenance)
+                if (endpoint.includes('/api/next')) {
+                    showPreloadIndicator();
+                }
+                
                 const response = await fetch(endpoint, { method: 'POST' });
                 const data = await response.json();
                 

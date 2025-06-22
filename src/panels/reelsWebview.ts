@@ -135,9 +135,6 @@ export class ReelsWebviewPanel {
 
     private async _handleMessage(message: any) {
         switch (message.command) {
-            case 'performLogin':
-                await this._controller.performLogin();
-                break;
             case 'ready':
                 // Webview is ready, initialize controller if not already done
                 if (!this._controller.isInitialized()) {
