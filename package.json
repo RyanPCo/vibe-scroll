@@ -21,6 +21,14 @@
         "category": "Instagram Reels"
       }
     ],
+    "keybindings": [
+      {
+        "command": "instagramReels.scroll",
+        "key": "ctrl+alt+i",
+        "mac": "alt+cmd+i",
+        "when": "!terminalFocus"
+      }
+    ],
     "menus": {
       "commandPalette": [
         {

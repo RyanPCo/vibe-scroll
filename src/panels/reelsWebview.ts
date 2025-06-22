@@ -13,13 +13,22 @@ export class ReelsWebviewPanel {
     private _disposables: vscode.Disposable[] = [];
 
     public static createOrShow(extensionUri: vscode.Uri, controller: PuppeteerController, mediaBridge?: MediaBridge) {
-        const column = vscode.window.activeTextEditor
-            ? vscode.window.activeTextEditor.viewColumn
-            : undefined;
+        // Determine the column for the webview panel
+        // If there are visible text editors, open in a new column to the right
+        // Otherwise, open in the first column
+        let targetColumn: vscode.ViewColumn;
+        
+        if (vscode.window.visibleTextEditors.length > 0) {
+            // Files are open, so open in a separate panel to the right
+            targetColumn = vscode.ViewColumn.Beside;
+        } else {
+            // No files open, use the first column
+            targetColumn = vscode.ViewColumn.One;
+        }
 
-        // If we already have a panel, show it.
+        // If we already have a panel, show it in the appropriate column
         if (ReelsWebviewPanel.currentPanel) {
-            ReelsWebviewPanel.currentPanel._panel.reveal(column);
+            ReelsWebviewPanel.currentPanel._panel.reveal(targetColumn);
             return;
         }
 
@@ -27,7 +36,7 @@ export class ReelsWebviewPanel {
         const panel = vscode.window.createWebviewPanel(
             ReelsWebviewPanel.viewType,
             'Instagram Reels',
-            column || vscode.ViewColumn.One,
+            targetColumn,
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
