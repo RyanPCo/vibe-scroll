@@ -1,6 +1,6 @@
 # Compiled output
 out/
-*.js
+out/*.js
 *.js.map
 
 # Node modules

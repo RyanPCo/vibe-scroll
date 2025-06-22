@@ -97,7 +97,7 @@ export class PuppeteerController extends EventEmitter {
             }
 
             this.browser = await puppeteer.launch({
-                headless: false,
+                headless: true,
                 defaultViewport: { width: 1280, height: 720 },
                 executablePath, // Use system Chrome if available
                 args: chromeArgs

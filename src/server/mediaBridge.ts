@@ -732,10 +732,17 @@ export class MediaBridge extends EventEmitter {
     </style>
 </head>
 <body>
-    <div class="container">
+            <div class="container">
         <button id="prev-btn" class="nav-btn nav-btn-left">⬆</button>
         
-        <div class="loading" id="loading">Loading Instagram Reel...</div>
+        <div class="loading" id="loading">
+            <div style="color: white; text-align: center;">
+                <h3>Loading Instagram Reel...</h3>
+                <p>Reel ID: ${reelId}</p>
+                <p>If the reel doesn't load, Instagram's embed service might be unavailable.</p>
+                <button onclick="window.location.reload()" style="background: #e91e63; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px;">Retry</button>
+            </div>
+        </div>
         
         <div class="preload-indicator" id="preload-indicator">
             <div class="spinner"></div>
@@ -821,7 +828,7 @@ export class MediaBridge extends EventEmitter {
 
 
     
-    <script async src="//www.instagram.com/embed.js" onload="initializeApp()"></script>
+    <script async src="//www.instagram.com/embed.js"></script>
     <script>
         let isLoading = false;
         let preloadCount = 0;
@@ -834,7 +841,60 @@ export class MediaBridge extends EventEmitter {
             setupDebugPanel();
             setupPostMessageListener();
             loadInitialDebugInfo();
+            
+            // Initialize Instagram embed
+            if (window.instgrm) {
+                window.instgrm.Embeds.process();
+            }
         }
+        
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing app...');
+            initializeApp();
+            
+            // Set up Instagram embed retry mechanism
+            let retryCount = 0;
+            const maxRetries = 5;
+            
+            function tryProcessEmbed() {
+                console.log('Attempting to process Instagram embed, attempt:', retryCount + 1);
+                
+                if (window.instgrm && window.instgrm.Embeds) {
+                    console.log('Instagram embed script loaded, processing...');
+                    window.instgrm.Embeds.process();
+                    document.getElementById('loading').style.display = 'none';
+                } else {
+                    retryCount++;
+                    if (retryCount < maxRetries) {
+                        console.log('Instagram script not ready, retrying in 1 second...');
+                        setTimeout(tryProcessEmbed, 1000);
+                    } else {
+                        console.error('Instagram embed failed to load after', maxRetries, 'attempts');
+                        document.getElementById('loading').innerHTML = 
+                            '<div style="color: white; text-align: center;">' +
+                            '<h3>Unable to load Instagram embed</h3>' +
+                            '<p>Reel ID: ${reelId}</p>' +
+                            '<p>Please check your internet connection or try again later.</p>' +
+                            '<button onclick="window.location.reload()" style="background: #e91e63; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px;">Retry</button>' +
+                            '</div>';
+                    }
+                }
+            }
+            
+            // Start trying to process embed
+            setTimeout(tryProcessEmbed, 500);
+        });
+        
+        // Also initialize when Instagram script loads
+        window.addEventListener('load', function() {
+            console.log('Window loaded, checking Instagram script...');
+            if (window.instgrm && window.instgrm.Embeds) {
+                console.log('Processing Instagram embeds on window load...');
+                window.instgrm.Embeds.process();
+                document.getElementById('loading').style.display = 'none';
+            }
+        });
         
         function setupWebSocket() {
             try {
