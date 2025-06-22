@@ -38,7 +38,7 @@ async function startInstagramReelsViewer(context) {
         }, async (progress, token) => {
             // Check if already running
             if (puppeteerController?.isInitialized()) {
-                reelsWebview_1.ReelsWebviewPanel.createOrShow(context.extensionUri, puppeteerController);
+                reelsWebview_1.ReelsWebviewPanel.createOrShow(context.extensionUri, puppeteerController, mediaBridge);
                 return;
             }
             progress.report({ increment: 20, message: "Initializing Puppeteer controller..." });
@@ -53,6 +53,8 @@ async function startInstagramReelsViewer(context) {
                     port: 3000,
                     corsOrigin: '*'
                 });
+                // Set the puppeteer controller for the media bridge
+                mediaBridge.setPuppeteerController(puppeteerController);
                 await mediaBridge.start();
             }
             catch (error) {
@@ -61,7 +63,7 @@ async function startInstagramReelsViewer(context) {
             }
             progress.report({ increment: 70, message: "Creating webview panel..." });
             // Create and show webview panel
-            reelsWebview_1.ReelsWebviewPanel.createOrShow(context.extensionUri, puppeteerController);
+            reelsWebview_1.ReelsWebviewPanel.createOrShow(context.extensionUri, puppeteerController, mediaBridge);
             progress.report({ increment: 100, message: "Instagram Reels Viewer ready!" });
             // Show success message
             vscode.window.showInformationMessage('🎬 Instagram Reels Viewer started! The browser window will open for Instagram login if needed.');

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { PuppeteerController, ReelData } from '../controller/puppeteerController';
+import { MediaBridge } from '../server/mediaBridge';
 
 export class ReelsWebviewPanel {
     public static currentPanel: ReelsWebviewPanel | undefined;
@@ -8,9 +9,10 @@ export class ReelsWebviewPanel {
     private readonly _panel: vscode.WebviewPanel;
     private readonly _extensionUri: vscode.Uri;
     private readonly _controller: PuppeteerController;
+    private readonly _mediaBridge: MediaBridge | undefined;
     private _disposables: vscode.Disposable[] = [];
 
-    public static createOrShow(extensionUri: vscode.Uri, controller: PuppeteerController) {
+    public static createOrShow(extensionUri: vscode.Uri, controller: PuppeteerController, mediaBridge?: MediaBridge) {
         const column = vscode.window.activeTextEditor
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
@@ -35,13 +37,14 @@ export class ReelsWebviewPanel {
             }
         );
 
-        ReelsWebviewPanel.currentPanel = new ReelsWebviewPanel(panel, extensionUri, controller);
+        ReelsWebviewPanel.currentPanel = new ReelsWebviewPanel(panel, extensionUri, controller, mediaBridge);
     }
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, controller: PuppeteerController) {
+    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, controller: PuppeteerController, mediaBridge?: MediaBridge) {
         this._panel = panel;
         this._extensionUri = extensionUri;
         this._controller = controller;
+        this._mediaBridge = mediaBridge;
 
         // Set the webview's initial html content
         this._update();
@@ -115,6 +118,11 @@ export class ReelsWebviewPanel {
         try {
             const reelData = await this._controller.getCurrentReelInfo();
             if (reelData) {
+                // Update the media bridge with the new reel ID
+                if (this._mediaBridge) {
+                    this._mediaBridge.updateCurrentReel(reelData.reelId);
+                }
+                
                 this._sendMessage({
                     command: 'reelLoaded',
                     data: reelData
@@ -127,29 +135,8 @@ export class ReelsWebviewPanel {
 
     private async _handleMessage(message: any) {
         switch (message.command) {
-            case 'next':
-                await this._controller.scrollToNextReel();
-                break;
-            case 'previous':
-                await this._controller.scrollToPreviousReel();
-                break;
-            case 'like':
-                await this._controller.likeCurrentReel();
-                break;
-            case 'save':
-                await this._controller.saveCurrentReel();
-                break;
-            case 'openInBrowser':
-                const url = await this._controller.openCurrentReelInBrowser();
-                if (url) {
-                    vscode.env.openExternal(vscode.Uri.parse(url));
-                }
-                break;
             case 'performLogin':
                 await this._controller.performLogin();
-                break;
-            case 'refresh':
-                await this._loadCurrentReel();
                 break;
             case 'ready':
                 // Webview is ready, initialize controller if not already done
@@ -157,6 +144,7 @@ export class ReelsWebviewPanel {
                     await this._controller.initialize();
                 }
                 break;
+            // All other interactions are now handled by the server
         }
     }
 
@@ -195,7 +183,7 @@ export class ReelsWebviewPanel {
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                                 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:; script-src 'nonce-${nonce}' https://www.instagram.com; connect-src https:; frame-src https://www.instagram.com; child-src https://www.instagram.com;">
+                                 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:; script-src 'nonce-${nonce}'; connect-src https: http://localhost:3000; frame-src http://localhost:3000 https://www.instagram.com; child-src http://localhost:3000 https://www.instagram.com;">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <link href="${styleUri}" rel="stylesheet">
                 <title>Instagram Reels</title>
@@ -225,24 +213,7 @@ export class ReelsWebviewPanel {
                     </div>
                     
                                          <div id="main-content" class="main-content" style="display: none;">
-                         <div class="reel-viewer">
-                             <button id="prev-btn" class="nav-btn nav-btn-left">⬆</button>
-                             
-                             <div class="embed-container" id="embed-container">
-                                 <div id="instagram-embed">
-                                     <p>Loading reel...</p>
-                                 </div>
-                             </div>
-                             
-                             <button id="next-btn" class="nav-btn nav-btn-right">⬇</button>
-                             
-                             <div class="bottom-controls">
-                                 <button id="like-btn" class="control-btn">❤️</button>
-                                 <button id="save-btn" class="control-btn">📖</button>
-                                 <button id="open-browser-btn" class="control-btn">🌐</button>
-                                 <button id="refresh-btn" class="control-btn">🔄</button>
-                             </div>
-                         </div>
+                         <iframe id="instagram-iframe" src="http://localhost:3000" style="width: 100%; height: 100vh; border: none;"></iframe>
                      </div>
                     
                     <div id="error" class="error-screen" style="display: none;">

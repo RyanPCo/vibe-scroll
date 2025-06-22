@@ -43,7 +43,7 @@ async function startInstagramReelsViewer(context: vscode.ExtensionContext) {
             async (progress, token) => {
                 // Check if already running
                 if (puppeteerController?.isInitialized()) {
-                    ReelsWebviewPanel.createOrShow(context.extensionUri, puppeteerController);
+                    ReelsWebviewPanel.createOrShow(context.extensionUri, puppeteerController, mediaBridge);
                     return;
                 }
 
@@ -63,6 +63,8 @@ async function startInstagramReelsViewer(context: vscode.ExtensionContext) {
                         port: 3000,
                         corsOrigin: '*'
                     });
+                    // Set the puppeteer controller for the media bridge
+                    mediaBridge.setPuppeteerController(puppeteerController);
                     await mediaBridge.start();
                 } catch (error) {
                     console.warn('Failed to start media bridge:', error);
@@ -72,7 +74,7 @@ async function startInstagramReelsViewer(context: vscode.ExtensionContext) {
                 progress.report({ increment: 70, message: "Creating webview panel..." });
 
                 // Create and show webview panel
-                ReelsWebviewPanel.createOrShow(context.extensionUri, puppeteerController);
+                ReelsWebviewPanel.createOrShow(context.extensionUri, puppeteerController, mediaBridge);
 
                 progress.report({ increment: 100, message: "Instagram Reels Viewer ready!" });
 
