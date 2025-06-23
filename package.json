@@ -1,7 +1,7 @@
 {
   "name": "vibe-scroll",
-  "displayName": "Vibe Scroll - Instagram Reels Viewer",
-  "description": "A VSCode extension to browse Instagram Reels using headless browser automation",
+  "displayName": "Vibe Scroll: Instagram Reels Viewer",
+  "description": "An extension to scroll Instagram Reels while you code",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.74.0"
@@ -17,8 +17,8 @@
     "commands": [
       {
         "command": "instagramReels.scroll",
-        "title": "Scroll Instagram Reels",
-        "category": "Instagram Reels"
+        "title": "Instagram Reels",
+        "category": "Vibe Scroll"
       }
     ],
     "keybindings": [
@@ -33,7 +33,7 @@
       "commandPalette": [
         {
           "command": "instagramReels.scroll",
-          "title": "Instagram Reels: Start Scrolling"
+          "title": "Vibe Scroll: Instagram Reels"
         }
       ]
     }

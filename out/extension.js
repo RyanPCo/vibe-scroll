@@ -33,7 +33,7 @@ async function startInstagramReelsViewer(context) {
         // Show progress while initializing
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
-            title: "Starting Instagram Reels Viewer",
+            title: "Starting Instagram Reels Vibe Scroll",
             cancellable: true
         }, async (progress, token) => {
             // Check if already running
@@ -41,7 +41,6 @@ async function startInstagramReelsViewer(context) {
                 reelsWebview_1.ReelsWebviewPanel.createOrShow(context.extensionUri, puppeteerController, mediaBridge);
                 return;
             }
-            progress.report({ increment: 20, message: "Initializing Puppeteer controller..." });
             // Initialize Puppeteer controller
             console.log('🔧 Creating PuppeteerController with path:', context.extensionPath);
             exports.puppeteerController = puppeteerController = new puppeteerController_1.PuppeteerController(context.extensionPath);
@@ -49,7 +48,6 @@ async function startInstagramReelsViewer(context) {
             setupControllerEventHandlers();
             console.log('🚀 Starting controller initialization...');
             await puppeteerController.initialize();
-            progress.report({ increment: 50, message: "Starting media bridge server..." });
             // Initialize media bridge (optional)
             try {
                 exports.mediaBridge = mediaBridge = new mediaBridge_1.MediaBridge({

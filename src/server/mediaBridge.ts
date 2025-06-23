@@ -524,7 +524,7 @@ export class MediaBridge extends EventEmitter {
         
         <div class="preload-indicator" id="preload-indicator">
             <div class="spinner"></div>
-            <span>Building reel buffer...</span>
+            <span>Fetching reels...</span>
         </div>
         
         <div class="embed-wrapper">
