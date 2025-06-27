@@ -51,7 +51,7 @@ async function startInstagramReelsViewer(context) {
             // Initialize media bridge (optional)
             try {
                 exports.mediaBridge = mediaBridge = new mediaBridge_1.MediaBridge({
-                    port: 3000,
+                    port: 3003,
                     corsOrigin: '*'
                 });
                 // Set the puppeteer controller for the media bridge
@@ -67,7 +67,7 @@ async function startInstagramReelsViewer(context) {
             reelsWebview_1.ReelsWebviewPanel.createOrShow(context.extensionUri, puppeteerController, mediaBridge);
             progress.report({ increment: 100, message: "Instagram Reels Viewer ready!" });
             // Show success message
-            vscode.window.showInformationMessage('🎬 Instagram Reels Viewer started! The browser window will open for Instagram login if needed.');
+            vscode.window.showInformationMessage('🎬 Instagram Reels Vibe Scroll started!');
         });
     }
     catch (error) {

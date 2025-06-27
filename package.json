@@ -1,13 +1,23 @@
 {
   "name": "vibe-scroll",
   "displayName": "Vibe Scroll: Instagram Reels Viewer",
-  "description": "An extension to scroll Instagram Reels while you code",
-  "version": "0.0.1",
+  "description": "Scroll Instagram Reels while you code",
+  "icon": "images/icon.png",
+  "publisher": "coflint",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RyanPCo/vibe-scroll.git"
+  },
+  "license": "MIT",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.74.0"
   },
   "categories": [
-    "Other"
+    "Themes", "Other"
+  ],
+  "keywords": [
+    "Instagram", "Reels", "Vibe", "Video", "Entertainment", "Social Media", "Fun", "Break"
   ],
   "activationEvents": [
     "onCommand:instagramReels.scroll"

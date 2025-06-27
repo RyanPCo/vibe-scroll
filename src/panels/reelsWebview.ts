@@ -190,7 +190,7 @@ export class ReelsWebviewPanel {
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                                 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:; script-src 'nonce-${nonce}'; connect-src https: http://localhost:3000; frame-src http://localhost:3000 https://www.instagram.com; child-src http://localhost:3000 https://www.instagram.com;">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:; script-src 'nonce-${nonce}' 'unsafe-inline' https:; connect-src https: http://localhost:3003 https://www.instagram.com; frame-src http://localhost:3003 https://www.instagram.com; child-src http://localhost:3003 https://www.instagram.com; media-src https: http://localhost:3003 https://www.instagram.com blob:;">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <link href="${styleUri}" rel="stylesheet">
                 <title>Instagram Reels</title>
@@ -220,7 +220,7 @@ export class ReelsWebviewPanel {
                     </div>
                     
                     <div id="main-content" class="main-content" style="display: none;">
-                        <iframe id="instagram-iframe" src="http://localhost:3000" style="width: 100%; height: 100vh; border: none;"></iframe>
+                        <iframe id="instagram-iframe" src="http://localhost:3003" style="width: 100%; height: 100vh; border: none;"></iframe>
                     </div>
                     
                     <div id="error" class="error-screen" style="display: none;">

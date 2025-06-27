@@ -676,7 +676,7 @@ export class MediaBridge extends EventEmitter {
         
         function setupWebSocket() {
             try {
-                const ws = new WebSocket('ws://localhost:3000');
+                const ws = new WebSocket('ws://localhost:3003');
                 
                 ws.onmessage = (event) => {
                     try {
@@ -694,7 +694,7 @@ export class MediaBridge extends EventEmitter {
                 ws.onclose = () => {
                     console.log('WebSocket disconnected');
                     // Attempt to reconnect after a delay
-                    setTimeout(setupWebSocket, 3000);
+                    setTimeout(setupWebSocket, 3003);
                 };
                 
                 ws.onerror = (error) => {
@@ -931,7 +931,7 @@ export class MediaBridge extends EventEmitter {
             setTimeout(() => {
                 notification.classList.remove('show');
                 setTimeout(() => notification.remove(), 300);
-            }, 3000);
+            }, 3003);
         }
     </script>
 </body>

@@ -137,7 +137,7 @@ export class PuppeteerController extends EventEmitter {
             });
 
             // Wait for reels to load
-            await this.page!.waitForTimeout(3000);
+            await this.page!.waitForTimeout(3003);
             await this.waitForReelsToLoad();
             
             console.log('Reels loaded - starting reel collection');
@@ -275,7 +275,7 @@ export class PuppeteerController extends EventEmitter {
         try {
             console.log('Collecting more reels by reloading page...');
             await this.page!.reload({ waitUntil: 'networkidle2' });
-            await this.page!.waitForTimeout(3000);
+            await this.page!.waitForTimeout(3003);
             await this.waitForReelsToLoad();
             await this.collectReelsFromCurrentPage();
         } catch (error) {
@@ -314,7 +314,7 @@ export class PuppeteerController extends EventEmitter {
                 timeout: 15000 
             });
             
-            await this.collectionPage.waitForTimeout(3000);
+            await this.collectionPage.waitForTimeout(3003);
             
             // Check if collection page still exists (might be closed during cleanup)
             if (!this.collectionPage || this.collectionPage.isClosed()) {

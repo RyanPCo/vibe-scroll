@@ -60,7 +60,7 @@ async function startInstagramReelsViewer(context: vscode.ExtensionContext) {
                 // Initialize media bridge (optional)
                 try {
                     mediaBridge = new MediaBridge({
-                        port: 3000,
+                        port: 3003,
                         corsOrigin: '*'
                     });
                     // Set the puppeteer controller for the media bridge

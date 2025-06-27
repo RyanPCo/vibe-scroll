@@ -34,7 +34,7 @@
         // Load initial iframe content even without reel data
         if (instagramIframe) {
             console.log('Loading initial iframe content...');
-            instagramIframe.src = `http://localhost:3000?_t=${Date.now()}`;
+            instagramIframe.src = `http://localhost:3003?_t=${Date.now()}`;
         }
         
         // Notify extension that webview is ready
@@ -46,7 +46,7 @@
                 console.log('Auto-showing main content after timeout');
                 showScreen('main-content');
             }
-        }, 3000);
+        }, 3003);
     });
     
     function setupEventListeners() {
@@ -142,7 +142,7 @@
         if (!reelData || !reelData.reelId) {
             console.log('No reel data provided, loading default reel');
             // Load default reel if no data provided
-            const newSrc = `http://localhost:3000?_t=${Date.now()}`;
+            const newSrc = `http://localhost:3003?_t=${Date.now()}`;
             if (instagramIframe) {
                 instagramIframe.src = newSrc;
             }
@@ -152,7 +152,7 @@
         currentReel = reelData;
         
         // Update iframe src with new reel ID
-        const newSrc = `http://localhost:3000?reelId=${reelData.reelId}&_t=${Date.now()}`;
+        const newSrc = `http://localhost:3003?reelId=${reelData.reelId}&_t=${Date.now()}`;
         console.log('Loading reel:', reelData.reelId, 'URL:', newSrc);
         
         if (instagramIframe) {
@@ -211,7 +211,7 @@
             if (notification.parentNode) {
                 notification.parentNode.removeChild(notification);
             }
-        }, 3000);
+        }, 3003);
     }
     
     function formatNumber(num) {
